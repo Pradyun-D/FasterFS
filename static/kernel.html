@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>FasterFS — Kernel eBPF Visualization</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@700;900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0D0D0F;--bg-card:#151518;--bg-inset:#1A1A1E;
+  --text:#F3F4F6;--muted:#6B7280;--border:#27272A;
+  --red:#D4232A;--green:#16A34A;--shadow:rgba(0,0,0,.4);
+  --mono:'JetBrains Mono',monospace;--head:'Inter',sans-serif;
+}
+html{font-size:13px;-webkit-font-smoothing:antialiased}
+body{background:var(--bg);color:var(--text);font-family:var(--head);min-height:100vh}
+::-webkit-scrollbar{width:5px}
+::-webkit-scrollbar-track{background:var(--bg)}
+::-webkit-scrollbar-thumb{background:#333;border-radius:3px}
+
+header{
+  position:sticky;top:0;z-index:200;
+  display:flex;align-items:center;gap:1.2rem;flex-wrap:wrap;
+  padding:.55rem 1.4rem;background:#111;
+  border-bottom:1px solid #222;
+  box-shadow:0 2px 8px rgba(0,0,0,.25);
+}
+.logo{
+  font-family:'DM Sans','Inter',sans-serif;font-size:1.3rem;font-weight:900;
+  letter-spacing:-.03em;white-space:nowrap;
+  background:linear-gradient(90deg,#22D3EE 0%,#06B6D4 50%,#0891B2 100%);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+}
+.logo em{
+  background:linear-gradient(90deg,#7C3AED 0%,#EC4899 100%);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+  font-style:normal;font-weight:900;
+}
+nav{display:flex;gap:.3rem;margin-left:.5rem}
+nav a{
+  font-size:.72rem;font-weight:600;letter-spacing:.04em;
+  color:#9CA3AF;text-decoration:none;
+  padding:.3rem .7rem;border-radius:4px;
+  border:1px solid transparent;
+  transition:all .15s;
+}
+nav a:hover{color:#fff;border-color:#333}
+nav a.active{color:#fff;background:#1e1e22;border-color:#444}
+.pill{
+  display:flex;align-items:center;gap:.35rem;
+  font-size:.7rem;color:#9CA3AF;letter-spacing:.04em;
+  background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);
+  border-radius:4px;padding:.18rem .5rem;white-space:nowrap;
+}
+.dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.dot-green{background:#22C55E;box-shadow:0 0 6px rgba(34,197,94,.7);animation:blink 2s infinite}
+.dot-amber{background:#F59E0B;animation:blink 1.5s infinite}
+.dot-red{background:var(--red)}
+.dot-grey{background:#6B7280}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.35}}
+.hdr-right{display:flex;gap:.8rem;align-items:center;margin-left:auto;flex-wrap:wrap}
+.btn{
+  font-family:var(--head);font-size:.72rem;font-weight:600;letter-spacing:.04em;cursor:pointer;
+  color:#fff;background:#D4232A;border:none;border-radius:5px;
+  padding:.34rem .9rem;box-shadow:0 1px 3px rgba(0,0,0,.3);
+  transition:all .15s;white-space:nowrap;
+}
+.btn:hover{background:#B81D23;transform:translateY(-1px)}
+.btn:active{transform:translateY(0)}
+.btn:disabled{opacity:.5;cursor:not-allowed;transform:none}
+.btn-ghost{background:transparent;border:1px solid #333;color:#9CA3AF}
+.btn-ghost:hover{background:#1e1e22;color:#fff;border-color:#555}
+
+/* ── Layout ── */
+.page{display:grid;grid-template-columns:1fr 280px;gap:1rem;padding:1rem 1.4rem;max-width:1400px;margin:0 auto}
+@media(max-width:900px){.page{grid-template-columns:1fr}}
+
+.card{
+  background:var(--bg-card);border:1px solid var(--border);
+  border-radius:8px;padding:.85rem .95rem;
+  box-shadow:0 1px 4px var(--shadow);overflow:hidden;
+}
+.ctitle{
+  font-size:.65rem;font-weight:600;color:var(--muted);
+  letter-spacing:.1em;text-transform:uppercase;
+  margin-bottom:.65rem;padding-bottom:.35rem;
+  border-bottom:1px solid var(--border);
+  display:flex;align-items:center;gap:.4rem;
+}
+.badge{
+  font-size:.6rem;letter-spacing:.06em;
+  background:rgba(212,35,42,.15);border:1px solid rgba(212,35,42,.3);
+  color:#D4232A;padding:.08rem .3rem;border-radius:3px;margin-left:.3rem;
+}
+.badge-green{background:rgba(34,197,94,.1);border-color:rgba(34,197,94,.3);color:#22C55E}
+.badge-blue{background:rgba(34,211,238,.1);border-color:rgba(34,211,238,.3);color:#22D3EE}
+
+/* ── Chunk Grid ── */
+#chunk-grid{
+  display:grid;
+  grid-template-columns:repeat(12,1fr);
+  gap:4px;
+  padding:4px;
+}
+.chunk{
+  aspect-ratio:1;border-radius:3px;
+  background:#1E1E22;
+  border:1px solid #2A2A2E;
+  cursor:pointer;
+  transition:background .3s,transform .15s,box-shadow .3s;
+  position:relative;
+}
+.chunk:hover{transform:scale(1.25);z-index:10;box-shadow:0 2px 12px rgba(0,0,0,.5)}
+.chunk-tooltip{
+  position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);
+  background:#111;border:1px solid #333;border-radius:4px;
+  padding:.3rem .5rem;font-size:.6rem;font-family:var(--mono);
+  color:#fff;white-space:nowrap;pointer-events:none;
+  z-index:100;display:none;
+}
+.chunk:hover .chunk-tooltip{display:block}
+
+/* Colors: cold→warm→hot */
+.heat-0{background:#1E1E22;border-color:#2A2A2E}
+.heat-1{background:#1a2744;border-color:#1e3a6e}
+.heat-2{background:#0c3b6e;border-color:#1a5ca8}
+.heat-3{background:#1a5ca8;border-color:#2a7cd8}
+.heat-4{background:#d47e0a;border-color:#e89011}
+.heat-5{background:#D4232A;border-color:#ff3a40;box-shadow:0 0 6px rgba(212,35,42,.4)}
+
+/* ── Stats Panel ── */
+.stat-row{
+  display:flex;align-items:baseline;justify-content:space-between;
+  padding:.4rem 0;border-bottom:1px solid var(--border);
+}
+.stat-row:last-child{border-bottom:none}
+.stat-label{font-size:.72rem;color:var(--muted)}
+.stat-val{font-family:var(--mono);font-size:.9rem;font-weight:700;color:var(--text)}
+.stat-val.accent{color:#22D3EE}
+.stat-val.hot{color:#D4232A}
+.stat-val.warm{color:#F59E0B}
+
+/* ── Legend ── */
+.legend{display:flex;gap:.8rem;flex-wrap:wrap;margin-top:.5rem}
+.leg-item{display:flex;align-items:center;gap:.35rem;font-size:.68rem;color:var(--muted)}
+.leg-dot{width:10px;height:10px;border-radius:2px;flex-shrink:0}
+
+/* ── Timeline chart ── */
+#timeline-wrap{height:140px;position:relative}
+
+/* ── Narrative ── */
+.narrative{
+  font-size:.78rem;line-height:1.7;color:#9CA3AF;
+  padding:.6rem .8rem;
+  background:#0F0F12;border-left:3px solid #22D3EE;
+  border-radius:0 4px 4px 0;
+  margin-top:.6rem;
+}
+
+/* ── Reads counter ── */
+.big-num{
+  font-family:var(--mono);font-size:2.2rem;font-weight:700;
+  color:#22D3EE;line-height:1;
+  text-shadow:0 0 20px rgba(34,211,238,.2);
+}
+.big-label{font-size:.68rem;color:var(--muted);margin-top:.2rem;letter-spacing:.06em;text-transform:uppercase}
+
+/* ── Column layout ── */
+.left-col{display:flex;flex-direction:column;gap:1rem}
+.right-col{display:flex;flex-direction:column;gap:1rem}
+
+/* hot strip */
+.hot-bar{
+  height:4px;border-radius:2px;
+  background:linear-gradient(90deg,#1a5ca8,#d47e0a,#D4232A);
+  margin-bottom:.5rem;
+  width:0%;transition:width .5s ease;
+}
+</style>
+</head>
+<body>
+
+<header>
+  <span class="logo">Faster<em>FS</em></span>
+  <nav>
+    <a href="/">Dashboard</a>
+    <a href="/kernel" class="active">Kernel</a>
+    <a href="/demos">Demos</a>
+    <a href="/fs">Explorer</a>
+    <a href="/notebook">Notebook</a>
+  </nav>
+  <div class="hdr-right">
+    <span class="pill" id="ebpf-pill">
+      <span class="dot dot-grey" id="ebpf-dot"></span>
+      <span id="ebpf-label">eBPF</span>
+    </span>
+    <span class="pill" id="ws-pill">
+      <span class="dot dot-grey" id="ws-dot"></span>
+      <span>WS</span>
+    </span>
+    <button class="btn" id="bench-btn" onclick="runBenchmark()">Run Benchmark</button>
+    <button class="btn btn-ghost" onclick="resetView()">Reset View</button>
+  </div>
+</header>
+
+<div class="page">
+  <!-- LEFT: chunk grid + timeline -->
+  <div class="left-col">
+
+    <div class="card">
+      <div class="ctitle">
+        Kernel Chunk Heatmap
+        <span class="badge" id="sim-badge">SIM</span>
+        <span class="badge-label" style="font-size:.65rem;color:var(--muted);margin-left:auto">92 chunks × 1000 rows each</span>
+      </div>
+      <div class="hot-bar" id="hot-bar"></div>
+      <div id="chunk-grid"></div>
+      <div class="legend">
+        <div class="leg-item"><div class="leg-dot heat-0"></div>Cold (0)</div>
+        <div class="leg-item"><div class="leg-dot heat-1"></div>Seen (1-2)</div>
+        <div class="leg-item"><div class="leg-dot heat-2"></div>Warm (3-5)</div>
+        <div class="leg-item"><div class="leg-dot heat-3"></div>Hot (6-15)</div>
+        <div class="leg-item"><div class="leg-dot heat-4"></div>Very Hot (16-30)</div>
+        <div class="leg-item"><div class="leg-dot heat-5"></div>Cached (&gt;30)</div>
+      </div>
+      <div class="narrative" id="narrative">
+        Waiting for data... Run the benchmark to watch the kernel detect hot chunks in real time.
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="ctitle">Latency Timeline <span style="font-size:.65rem;color:var(--muted);margin-left:auto;text-transform:none;font-weight:400">kernel-measured avg μs · rolling 60s</span></div>
+      <div id="timeline-wrap"><canvas id="timeline-chart"></canvas></div>
+    </div>
+
+  </div>
+
+  <!-- RIGHT: stats panel -->
+  <div class="right-col">
+
+    <div class="card">
+      <div class="ctitle">Live eBPF Stats</div>
+      <div style="text-align:center;padding:.8rem 0">
+        <div class="big-num" id="reads-count">0</div>
+        <div class="big-label">total reads observed</div>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">Hot Events</span>
+        <span class="stat-val hot" id="hot-events">0</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">Hot Chunks</span>
+        <span class="stat-val warm" id="hot-chunks">0</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">Avg Latency</span>
+        <span class="stat-val accent" id="avg-lat">0 μs</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">Cache Hit %</span>
+        <span class="stat-val" id="hit-pct">0%</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">TCP Tuned</span>
+        <span class="stat-val" id="tcp-tuned">0</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="ctitle">Benchmark Status</div>
+      <div id="bench-status" style="font-size:.78rem;color:var(--muted);padding:.4rem 0">
+        Not started. Click "Run Benchmark" to heat up the cache.
+      </div>
+      <div id="bench-result" style="display:none;margin-top:.6rem"></div>
+    </div>
+
+    <div class="card">
+      <div class="ctitle">How It Works</div>
+      <div style="font-size:.73rem;line-height:1.75;color:#9CA3AF">
+        <p style="margin-bottom:.5rem">
+          <strong style="color:#22D3EE">TC egress hook</strong> — intercepts every packet to MinIO port 9000, records timestamp in BPF map.
+        </p>
+        <p style="margin-bottom:.5rem">
+          <strong style="color:#F59E0B">TC ingress hook</strong> — when response arrives, computes round-trip latency, increments <code style="font-family:var(--mono);font-size:.68rem;color:#E879F9">chunk_hotness[key]</code>.
+        </p>
+        <p>
+          <strong style="color:#D4232A">Cache promotion</strong> — once count &gt; threshold, chunk is copied to local disk. Next read bypasses MinIO entirely.
+        </p>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="ctitle">Cluster</div>
+      <div id="cluster-info" style="font-size:.73rem;color:var(--muted)">Loading...</div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// ── State ──────────────────────────────────────────────────────────────────────
+let chunkCounts = new Array(92).fill(0);
+let latHistory = [];
+let timeLabels = [];
+let benchPolling = null;
+let tlChart = null;
+
+// ── Chunk Grid Init ───────────────────────────────────────────────────────────
+function initGrid() {
+  const grid = document.getElementById('chunk-grid');
+  grid.innerHTML = '';
+  for (let i = 0; i < 92; i++) {
+    const el = document.createElement('div');
+    el.className = 'chunk heat-0';
+    el.id = `c${i}`;
+    el.innerHTML = `<div class="chunk-tooltip">chunk ${i}<br>count: 0</div>`;
+    grid.appendChild(el);
+  }
+}
+
+function heatClass(count) {
+  if (count === 0) return 'heat-0';
+  if (count <= 2)  return 'heat-1';
+  if (count <= 5)  return 'heat-2';
+  if (count <= 15) return 'heat-3';
+  if (count <= 30) return 'heat-4';
+  return 'heat-5';
+}
+
+function updateGrid(chunks) {
+  let hotCount = 0;
+  chunks.forEach(({id, count}) => {
+    chunkCounts[id] = count;
+    const el = document.getElementById(`c${id}`);
+    if (!el) return;
+    const cls = heatClass(count);
+    el.className = `chunk ${cls}`;
+    el.querySelector('.chunk-tooltip').innerHTML = `chunk ${id}<br>count: ${count}`;
+    if (count > 15) hotCount++;
+  });
+  // Update hot bar
+  const pct = Math.min(100, (hotCount / 92) * 100);
+  document.getElementById('hot-bar').style.width = pct + '%';
+  // Update narrative
+  updateNarrative(hotCount, chunks.reduce((s,c)=>s+c.count,0));
+}
+
+function updateNarrative(hotCount, totalReads) {
+  const el = document.getElementById('narrative');
+  if (totalReads === 0) {
+    el.textContent = 'Waiting for data... Run the benchmark to watch the kernel detect hot chunks in real time.';
+  } else if (hotCount === 0) {
+    el.textContent = `Kernel has observed ${totalReads} reads. Chunks are still cold — keep reading to trigger cache promotion.`;
+  } else if (hotCount < 20) {
+    el.textContent = `Kernel has promoted ${hotCount} chunks to hot. Subsequent reads bypass MinIO entirely — watch latency drop.`;
+  } else {
+    el.textContent = `${hotCount}/92 chunks are hot-cached. The kernel learned your access pattern without any application changes.`;
+  }
+}
+
+// ── Timeline Chart ─────────────────────────────────────────────────────────────
+function initTimeline() {
+  const ctx = document.getElementById('timeline-chart').getContext('2d');
+  tlChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: [],
+      datasets: [{
+        label: 'Avg Latency (μs)',
+        data: [],
+        borderColor: '#22D3EE',
+        backgroundColor: 'rgba(34,211,238,.08)',
+        borderWidth: 1.5,
+        fill: true,
+        tension: 0.4,
+        pointRadius: 0,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: {
+          ticks: { color: '#6B7280', font: { size: 10 }, maxTicksLimit: 8 },
+          grid: { color: '#1E1E22' }
+        },
+        y: {
+          ticks: { color: '#6B7280', font: { size: 10 } },
+          grid: { color: '#1E1E22' },
+          title: { display: true, text: 'μs', color: '#6B7280', font: { size: 10 } }
+        }
+      }
+    }
+  });
+}
+
+function pushLatency(lat_us) {
+  const now = new Date().toLocaleTimeString('en',{hour12:false,hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  latHistory.push(lat_us);
+  timeLabels.push(now);
+  if (latHistory.length > 120) { latHistory.shift(); timeLabels.shift(); }
+  tlChart.data.labels = timeLabels;
+  tlChart.data.datasets[0].data = latHistory;
+  tlChart.update('none');
+}
+
+// ── WebSocket ─────────────────────────────────────────────────────────────────
+function connectWS() {
+  const ws = new WebSocket(`ws://${location.host}/ws`);
+  ws.onopen = () => {
+    document.getElementById('ws-dot').className = 'dot dot-green';
+  };
+  ws.onclose = () => {
+    document.getElementById('ws-dot').className = 'dot dot-red';
+    setTimeout(connectWS, 2000);
+  };
+  ws.onmessage = (e) => {
+    const d = JSON.parse(e.data);
+    if (d.type !== 'tick') return;
+    const eb = d.ebpf;
+    document.getElementById('reads-count').textContent = eb.reads.toLocaleString();
+    document.getElementById('hot-events').textContent = eb.hot.toLocaleString();
+    document.getElementById('hot-chunks').textContent = (eb.hot_chunks||eb.hot||0).toLocaleString();
+    document.getElementById('avg-lat').textContent = eb.lat_us.toFixed(1) + ' μs';
+    document.getElementById('hit-pct').textContent = eb.hit_pct.toFixed(1) + '%';
+    document.getElementById('tcp-tuned').textContent = eb.tcp.toLocaleString();
+
+    const sim = eb.sim;
+    document.getElementById('sim-badge').textContent = sim ? 'SIM' : 'LIVE';
+    document.getElementById('sim-badge').className = sim ? 'badge' : 'badge badge-green';
+    document.getElementById('ebpf-dot').className = sim ? 'dot dot-amber' : 'dot dot-green';
+    document.getElementById('ebpf-label').textContent = sim ? 'eBPF SIM' : 'eBPF LIVE';
+
+    if (eb.lat_us > 0) pushLatency(eb.lat_us);
+  };
+}
+
+// ── Chunk polling ─────────────────────────────────────────────────────────────
+async function pollChunks() {
+  try {
+    const r = await fetch('/api/ebpf/chunks');
+    const d = await r.json();
+    updateGrid(d.chunks);
+    if (!d.simulation) {
+      document.getElementById('sim-badge').textContent = 'LIVE';
+      document.getElementById('sim-badge').className = 'badge badge-green';
+    }
+  } catch(e) {}
+}
+
+// ── Cluster info ──────────────────────────────────────────────────────────────
+async function fetchCluster() {
+  try {
+    const r = await fetch('/api/cluster');
+    const d = await r.json();
+    const el = document.getElementById('cluster-info');
+    const rows = d.nodes.map(n =>
+      `<div style="display:flex;justify-content:space-between;padding:.3rem 0;border-bottom:1px solid var(--border);font-size:.72rem">
+        <span style="color:var(--text)">${n.hostname}</span>
+        <span style="font-family:var(--mono);color:${n.ebpf_enabled?'#22C55E':'#F59E0B'}">${n.ebpf_enabled?'eBPF':'cache-only'}</span>
+      </div>`
+    ).join('');
+    el.innerHTML = rows + `<div style="margin-top:.5rem;font-size:.68rem;color:var(--muted)">${d.node_count} node${d.node_count!==1?'s':''} · ${d.ebpf_nodes} with eBPF</div>`;
+  } catch(e) {}
+}
+
+// ── Benchmark ─────────────────────────────────────────────────────────────────
+async function runBenchmark() {
+  const btn = document.getElementById('bench-btn');
+  btn.disabled = true;
+  btn.textContent = 'Running...';
+  document.getElementById('bench-status').textContent = 'Benchmark running — watch the chunks heat up...';
+  document.getElementById('bench-result').style.display = 'none';
+
+  try {
+    await fetch('/api/benchmark/run', {method:'POST'});
+    benchPolling = setInterval(async () => {
+      const r = await fetch('/api/benchmark/result');
+      const d = await r.json();
+      if (d.status === 'complete') {
+        clearInterval(benchPolling);
+        btn.disabled = false;
+        btn.textContent = 'Run Benchmark';
+        showBenchResult(d.result);
+      }
+    }, 1000);
+  } catch(e) {
+    btn.disabled = false;
+    btn.textContent = 'Run Benchmark';
+    document.getElementById('bench-status').textContent = 'Error starting benchmark.';
+  }
+}
+
+function showBenchResult(result) {
+  const el = document.getElementById('bench-result');
+  if (result.error) {
+    document.getElementById('bench-status').textContent = 'Benchmark error: ' + result.error;
+    return;
+  }
+  const minio = result.minio || {};
+  const ffs   = result.pass3 || result.pass2 || {};
+  const sp    = result.speedup || {};
+  const speedup = sp.minio_vs_pass3 ||
+    (minio.p50_ms && ffs.p50_ms ? (parseFloat(minio.p50_ms)/parseFloat(ffs.p50_ms)).toFixed(1) : '?');
+
+  document.getElementById('bench-status').textContent = 'Benchmark complete.';
+  el.style.display = 'block';
+  el.innerHTML = `
+    <div style="font-family:var(--mono);font-size:.75rem">
+      <div style="display:flex;justify-content:space-between;padding:.3rem 0;border-bottom:1px solid var(--border)">
+        <span style="color:var(--muted)">MinIO P50</span>
+        <span>${minio.p50_ms||'?'} ms</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;padding:.3rem 0;border-bottom:1px solid var(--border)">
+        <span style="color:var(--muted)">FasterFS P3 P50</span>
+        <span style="color:#22C55E">${ffs.p50_ms||'?'} ms</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;padding:.6rem 0 0">
+        <span style="color:var(--muted)">Speedup</span>
+        <span style="color:#D4232A;font-size:1.1rem;font-weight:700">${speedup}×</span>
+      </div>
+    </div>`;
+}
+
+function resetView() {
+  chunkCounts = new Array(92).fill(0);
+  for (let i = 0; i < 92; i++) {
+    const el = document.getElementById(`c${i}`);
+    if (el) { el.className='chunk heat-0'; el.querySelector('.chunk-tooltip').innerHTML=`chunk ${i}<br>count: 0`; }
+  }
+  document.getElementById('hot-bar').style.width='0%';
+  latHistory=[]; timeLabels=[];
+  tlChart.data.labels=[]; tlChart.data.datasets[0].data=[];
+  tlChart.update('none');
+  document.getElementById('narrative').textContent='View reset. Run the benchmark to start fresh.';
+}
+
+// ── Init ─────────────────────────────────────────────────────────────────────
+window.addEventListener('load', () => {
+  initGrid();
+  initTimeline();
+  connectWS();
+  fetchCluster();
+  pollChunks();
+  setInterval(pollChunks, 500);
+  setInterval(fetchCluster, 5000);
+});
+</script>
+</body>
+</html>

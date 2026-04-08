@@ -1,0 +1,670 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>FasterFS — Demos</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@700;900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0D0D0F;--bg-card:#151518;--bg-inset:#1A1A1E;
+  --text:#F3F4F6;--muted:#6B7280;--border:#27272A;
+  --red:#D4232A;--green:#16A34A;--shadow:rgba(0,0,0,.4);
+  --mono:'JetBrains Mono',monospace;--head:'Inter',sans-serif;
+}
+html{font-size:13px;-webkit-font-smoothing:antialiased}
+body{background:var(--bg);color:var(--text);font-family:var(--head);min-height:100vh}
+::-webkit-scrollbar{width:5px}
+::-webkit-scrollbar-track{background:var(--bg)}
+::-webkit-scrollbar-thumb{background:#333;border-radius:3px}
+header{
+  position:sticky;top:0;z-index:200;
+  display:flex;align-items:center;gap:1.2rem;flex-wrap:wrap;
+  padding:.55rem 1.4rem;background:#111;
+  border-bottom:1px solid #222;box-shadow:0 2px 8px rgba(0,0,0,.25);
+}
+.logo{
+  font-family:'DM Sans','Inter',sans-serif;font-size:1.3rem;font-weight:900;
+  letter-spacing:-.03em;white-space:nowrap;
+  background:linear-gradient(90deg,#22D3EE 0%,#06B6D4 50%,#0891B2 100%);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+}
+.logo em{
+  background:linear-gradient(90deg,#7C3AED 0%,#EC4899 100%);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+  font-style:normal;font-weight:900;
+}
+nav a{
+  font-size:.72rem;font-weight:600;letter-spacing:.04em;
+  color:#9CA3AF;text-decoration:none;
+  padding:.3rem .7rem;border-radius:4px;border:1px solid transparent;margin-right:.2rem;
+  transition:all .15s;
+}
+nav a:hover{color:#fff;border-color:#333}
+nav a.active{color:#fff;background:#1e1e22;border-color:#444}
+.hdr-right{display:flex;gap:.8rem;align-items:center;margin-left:auto}
+.pill{
+  display:flex;align-items:center;gap:.35rem;font-size:.7rem;color:#9CA3AF;
+  background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);
+  border-radius:4px;padding:.18rem .5rem;white-space:nowrap;
+}
+.dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.dot-green{background:#22C55E;box-shadow:0 0 6px rgba(34,197,94,.7);animation:blink 2s infinite}
+.dot-amber{background:#F59E0B;animation:blink 1.5s infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.35}}
+
+.page{max-width:1100px;margin:0 auto;padding:1.2rem 1.4rem;display:flex;flex-direction:column;gap:1.2rem}
+
+.demo-section{
+  background:var(--bg-card);border:1px solid var(--border);
+  border-radius:8px;padding:1rem 1.2rem;
+  box-shadow:0 1px 4px var(--shadow);
+}
+.demo-header{
+  display:flex;align-items:center;gap:.8rem;margin-bottom:1rem;
+  padding-bottom:.6rem;border-bottom:1px solid var(--border);
+}
+.demo-num{
+  font-family:var(--mono);font-size:.65rem;font-weight:700;
+  color:#D4232A;background:rgba(212,35,42,.12);border:1px solid rgba(212,35,42,.25);
+  padding:.2rem .45rem;border-radius:4px;letter-spacing:.06em;
+}
+.demo-title{font-size:.95rem;font-weight:700;color:var(--text)}
+.demo-sub{font-size:.73rem;color:var(--muted);margin-left:auto}
+
+.btn{
+  font-family:var(--head);font-size:.72rem;font-weight:600;letter-spacing:.04em;cursor:pointer;
+  color:#fff;background:#D4232A;border:none;border-radius:5px;
+  padding:.38rem 1rem;box-shadow:0 1px 3px rgba(0,0,0,.3);
+  transition:all .15s;white-space:nowrap;
+}
+.btn:hover{background:#B81D23;transform:translateY(-1px)}
+.btn:disabled{opacity:.45;cursor:not-allowed;transform:none}
+.btn-grey{background:#27272A;color:#9CA3AF;border:1px solid #333}
+.btn-grey:hover{background:#333;color:#fff}
+
+/* Progress bar */
+.progress-wrap{height:6px;background:#1E1E22;border-radius:3px;margin:.6rem 0;overflow:hidden}
+.progress-bar{height:100%;width:0%;background:linear-gradient(90deg,#1a5ca8,#D4232A);border-radius:3px;transition:width .4s ease}
+
+/* Results grid */
+.results-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:.7rem;margin-top:.8rem}
+@media(max-width:700px){.results-grid{grid-template-columns:1fr}}
+.result-card{
+  background:#0F0F12;border:1px solid #222;border-radius:6px;
+  padding:.7rem .8rem;text-align:center;
+}
+.result-name{font-size:.65rem;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:.3rem}
+.result-val{font-family:var(--mono);font-size:1.4rem;font-weight:700;color:var(--text)}
+.result-sub{font-size:.65rem;color:var(--muted);margin-top:.15rem}
+.result-winner{border-color:rgba(34,197,94,.3);background:rgba(34,197,94,.05)}
+.result-winner .result-val{color:#22C55E}
+
+/* Speedup callout */
+.speedup{
+  display:inline-flex;align-items:baseline;gap:.3rem;
+  font-family:var(--mono);
+  background:rgba(212,35,42,.1);border:1px solid rgba(212,35,42,.25);
+  border-radius:6px;padding:.4rem .8rem;margin-top:.6rem;
+}
+.speedup-num{font-size:2rem;font-weight:700;color:#D4232A}
+.speedup-label{font-size:.75rem;color:#9CA3AF}
+
+/* Chart */
+.chart-wrap{height:180px;position:relative;margin-top:.8rem}
+
+/* Status text */
+.status-line{font-size:.75rem;color:var(--muted);font-family:var(--mono);margin:.4rem 0}
+
+/* Node scaling */
+.node-selector{display:flex;gap:.4rem;margin:.6rem 0}
+.node-btn{
+  font-size:.72rem;font-weight:600;font-family:var(--head);
+  padding:.3rem .7rem;border-radius:4px;cursor:pointer;
+  background:#1E1E22;color:#6B7280;border:1px solid #333;
+  transition:all .15s;
+}
+.node-btn.active{background:#D4232A;color:#fff;border-color:#D4232A}
+.node-btn:hover:not(.active){background:#27272A;color:#fff}
+
+/* Sort phases */
+.phases{display:flex;gap:.5rem;margin:.6rem 0;flex-wrap:wrap}
+.phase{
+  flex:1;min-width:100px;
+  background:#0F0F12;border:1px solid #222;border-radius:5px;
+  padding:.5rem .7rem;text-align:center;
+}
+.phase-name{font-size:.65rem;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.phase-time{font-family:var(--mono);font-size:1rem;font-weight:700;color:var(--text);margin-top:.2rem}
+.phase.done{border-color:rgba(34,197,94,.3);background:rgba(34,197,94,.05)}
+.phase.done .phase-time{color:#22C55E}
+.phase.running{border-color:rgba(245,158,11,.3);background:rgba(245,158,11,.05);animation:pulse .8s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.6}}
+</style>
+</head>
+<body>
+<header>
+  <span class="logo">Faster<em>FS</em></span>
+  <nav>
+    <a href="/">Dashboard</a>
+    <a href="/kernel">Kernel</a>
+    <a href="/demos" class="active">Demos</a>
+    <a href="/fs">Explorer</a>
+    <a href="/notebook">Notebook</a>
+  </nav>
+  <div class="hdr-right">
+    <span class="pill" id="ws-pill">
+      <span class="dot dot-amber" id="ws-dot"></span>
+      <span>WS</span>
+    </span>
+  </div>
+</header>
+
+<div class="page">
+
+  <!-- ── Demo A: Benchmark ─────────────────────────────────────────────────── -->
+  <div class="demo-section">
+    <div class="demo-header">
+      <span class="demo-num">DEMO A</span>
+      <span class="demo-title">Storage Benchmark — MinIO vs FasterFS</span>
+      <span class="demo-sub">5-pass sequential read, 92 chunks</span>
+    </div>
+
+    <div style="display:flex;align-items:center;gap:.8rem;flex-wrap:wrap">
+      <button class="btn" id="bench-btn" onclick="runBenchmark()">▶ Run Benchmark</button>
+      <button class="btn btn-grey" onclick="resetBenchmark()">↺ Reset</button>
+      <span class="status-line" id="bench-status">Click to start the benchmark.</span>
+    </div>
+
+    <div class="progress-wrap"><div class="progress-bar" id="bench-progress"></div></div>
+
+    <div class="results-grid" id="bench-results" style="display:none">
+      <div class="result-card">
+        <div class="result-name">Local CSV</div>
+        <div class="result-val" id="r-csv">—</div>
+        <div class="result-sub">ms P50</div>
+      </div>
+      <div class="result-card">
+        <div class="result-name">MinIO (S3)</div>
+        <div class="result-val" id="r-minio">—</div>
+        <div class="result-sub">ms P50</div>
+      </div>
+      <div class="result-card result-winner">
+        <div class="result-name">FasterFS (eBPF)</div>
+        <div class="result-val" id="r-ffs">—</div>
+        <div class="result-sub">ms P50 · cached</div>
+      </div>
+    </div>
+
+    <div id="speedup-callout" style="display:none">
+      <div class="speedup">
+        <span class="speedup-num" id="speedup-num">—</span>
+        <span class="speedup-label">× faster than MinIO (loopback)<br>
+          <span style="color:#6B7280;font-size:.68rem">333× measured on MacBook over WiFi (caching speedup)</span>
+        </span>
+      </div>
+    </div>
+
+    <div class="chart-wrap" id="bench-chart-wrap" style="display:none">
+      <canvas id="bench-chart"></canvas>
+    </div>
+  </div>
+
+  <!-- ── Demo B: Node Scaling ──────────────────────────────────────────────── -->
+  <div class="demo-section">
+    <div class="demo-header">
+      <span class="demo-num">DEMO B</span>
+      <span class="demo-title">Node Scaling — Aggregate Read Throughput</span>
+      <span class="demo-sub">add a node, watch the time drop</span>
+    </div>
+
+    <div style="font-size:.78rem;color:var(--muted);margin-bottom:.6rem">
+      Each node reads its own chunk partition from its local MinIO in parallel.
+      Adding a node halves wall-clock time and doubles aggregate throughput.
+    </div>
+
+    <div class="node-selector">
+      <button class="node-btn active" data-n="1" onclick="selectNodes(1)">1 node</button>
+      <button class="node-btn" data-n="2" onclick="selectNodes(2)">2 nodes</button>
+      <button class="node-btn" data-n="3" onclick="selectNodes(3)">3 nodes</button>
+      <button class="node-btn" data-n="4" onclick="selectNodes(4)">4 nodes</button>
+    </div>
+
+    <div style="display:flex;align-items:center;gap:.8rem;flex-wrap:wrap;margin-bottom:.4rem">
+      <button class="btn" id="scale-btn" onclick="runScaling()">▶ Run Scaling Test</button>
+      <button class="btn btn-grey" onclick="resetScaling()">↺ Reset</button>
+      <span class="status-line" id="scale-status">Select node count, then run.</span>
+    </div>
+
+    <div class="progress-wrap"><div class="progress-bar" id="scale-progress"></div></div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:.8rem;margin-top:.6rem">
+      <div>
+        <div style="font-size:.65rem;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:.3rem">Wall-clock Time (lower = faster)</div>
+        <div class="chart-wrap" style="height:150px"><canvas id="scale-chart-time"></canvas></div>
+      </div>
+      <div>
+        <div style="font-size:.65rem;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:.3rem">Aggregate Chunks/sec (higher = better)</div>
+        <div class="chart-wrap" style="height:150px"><canvas id="scale-chart-cps"></canvas></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Demo C: Distributed Sort ──────────────────────────────────────────── -->
+  <div class="demo-section">
+    <div class="demo-header">
+      <span class="demo-num">DEMO C</span>
+      <span class="demo-title">Distributed Sort — GraySort at Demo Scale</span>
+    </div>
+
+    <div style="font-size:.78rem;color:var(--muted);margin-bottom:.6rem">
+      Each node generates data → partitions by key prefix → sorts its partition. Mirrors the 3FS GraySort algorithm.
+    </div>
+
+    <div style="display:flex;align-items:center;gap:.8rem;flex-wrap:wrap;margin-bottom:.6rem">
+      <button class="btn" id="sort-btn" onclick="runSort()">▶ Start Distributed Sort</button>
+      <button class="btn btn-grey" onclick="resetSort()">↺ Reset</button>
+      <span class="status-line" id="sort-status">Ready. Will sort ~50MB across all connected nodes.</span>
+    </div>
+
+    <div class="progress-wrap"><div class="progress-bar" id="sort-progress"></div></div>
+
+    <div class="phases" id="sort-phases">
+      <div class="phase" id="phase-gen">
+        <div class="phase-name">Generate</div>
+        <div class="phase-time" id="t-gen">—</div>
+      </div>
+      <div class="phase" id="phase-part">
+        <div class="phase-name">Partition</div>
+        <div class="phase-time" id="t-part">—</div>
+      </div>
+      <div class="phase" id="phase-sort">
+        <div class="phase-name">Sort</div>
+        <div class="phase-time" id="t-sort">—</div>
+      </div>
+      <div class="phase" id="phase-total">
+        <div class="phase-name">Total</div>
+        <div class="phase-time" id="t-total">—</div>
+      </div>
+    </div>
+
+    <div id="sort-result" style="display:none;margin-top:.6rem;font-size:.78rem;color:#22C55E;font-family:var(--mono)"></div>
+  </div>
+
+</div>
+
+<script>
+// ── WebSocket ──────────────────────────────────────────────────────────────────
+(function connectWS() {
+  const ws = new WebSocket(`ws://${location.host}/ws`);
+  ws.onopen = () => { document.getElementById('ws-dot').className = 'dot dot-green'; };
+  ws.onclose = () => { document.getElementById('ws-dot').className = 'dot dot-amber'; setTimeout(connectWS, 2000); };
+})();
+
+// ── Cluster info — disable node buttons for unavailable node counts ────────────
+let clusterNodeCount = 1;
+(async function loadCluster() {
+  try {
+    const r = await fetch('/api/cluster');
+    const d = await r.json();
+    clusterNodeCount = d.node_count || 1;
+  } catch(e) { clusterNodeCount = 1; }
+  document.querySelectorAll('.node-btn').forEach(b => {
+    const n = parseInt(b.dataset.n);
+    if (n > clusterNodeCount) {
+      b.disabled = true;
+      b.title = `Only ${clusterNodeCount} node(s) connected`;
+      b.style.opacity = '0.35';
+      b.style.cursor = 'not-allowed';
+    }
+  });
+})();
+
+// ── Demo A: Benchmark ──────────────────────────────────────────────────────────
+let benchChart = null;
+let benchPolling = null;
+let benchProgress = 0;
+let benchProgressTimer = null;
+
+const _progressRAF = {};
+function animateProgress(barId, durationMs) {
+  const bar = document.getElementById(barId);
+  bar.style.width = '0%';
+  if (_progressRAF[barId]) cancelAnimationFrame(_progressRAF[barId]);
+  let start = null;
+  const step = (ts) => {
+    if (!start) start = ts;
+    const pct = Math.min(90, ((ts - start) / durationMs) * 90);
+    bar.style.width = pct + '%';
+    if (pct < 90) _progressRAF[barId] = requestAnimationFrame(step);
+  };
+  _progressRAF[barId] = requestAnimationFrame(step);
+}
+function completeProgress(barId) {
+  if (_progressRAF[barId]) { cancelAnimationFrame(_progressRAF[barId]); delete _progressRAF[barId]; }
+  document.getElementById(barId).style.width = '100%';
+}
+
+async function runBenchmark() {
+  const btn = document.getElementById('bench-btn');
+  btn.disabled = true; btn.textContent = 'Running...';
+  document.getElementById('bench-status').textContent = 'Running 5-pass benchmark...';
+  document.getElementById('bench-results').style.display = 'none';
+  document.getElementById('speedup-callout').style.display = 'none';
+  document.getElementById('bench-chart-wrap').style.display = 'none';
+
+  animateProgress('bench-progress', 30000);
+
+  try {
+    await fetch('/api/benchmark/run', {method:'POST'});
+    benchPolling = setInterval(async () => {
+      const r = await fetch('/api/benchmark/result');
+      const d = await r.json();
+      if (d.status === 'complete') {
+        clearInterval(benchPolling);
+        completeProgress('bench-progress');
+        btn.disabled = false; btn.textContent = '▶ Run Again';
+        showBenchResult(d.result);
+      }
+    }, 1000);
+  } catch(e) {
+    btn.disabled = false; btn.textContent = '▶ Run Benchmark';
+    document.getElementById('bench-status').textContent = 'Error: ' + e.message;
+  }
+}
+
+function showBenchResult(result) {
+  if (result.error) {
+    document.getElementById('bench-status').textContent = 'Error: ' + result.error;
+    return;
+  }
+  // Benchmark keys: result.local, result.minio, result.pass1/2/3, result.speedup
+  const csv   = result.local  || {};
+  const minio = result.minio  || {};
+  const ffs   = result.pass3  || result.pass2 || {};  // pass3 = hot cached
+
+  document.getElementById('r-csv').textContent   = (csv.p50_ms   || '?') + ' ms';
+  document.getElementById('r-minio').textContent = (minio.p50_ms || '?') + ' ms';
+  document.getElementById('r-ffs').textContent   = (ffs.p50_ms   || '?') + ' ms';
+  document.getElementById('bench-results').style.display = 'grid';
+
+  const sp = result.speedup || {};
+  const speedup = sp.minio_vs_pass3 ||
+    (minio.p50_ms && ffs.p50_ms ? (parseFloat(minio.p50_ms)/parseFloat(ffs.p50_ms)).toFixed(1) : '?');
+  document.getElementById('speedup-num').textContent = speedup + '×';
+  document.getElementById('speedup-callout').style.display = 'block';
+  document.getElementById('bench-status').textContent = 'Complete. FasterFS (pass 3, hot-cached) vs MinIO.';
+
+  // Bar chart — show all passes
+  const labels = ['Local CSV', 'MinIO', 'FasterFS P1', 'FasterFS P2', 'FasterFS P3'];
+  const vals = [
+    parseFloat(csv.p50_ms || 0),
+    parseFloat(minio.p50_ms || 0),
+    parseFloat((result.pass1 || {}).p50_ms || 0),
+    parseFloat((result.pass2 || {}).p50_ms || 0),
+    parseFloat((result.pass3 || {}).p50_ms || 0),
+  ];
+  const colors = ['#374151','#1a5ca8','#4a7a5a','#2a9a4a','#16A34A'];
+  document.getElementById('bench-chart-wrap').style.display = 'block';
+  if (benchChart) benchChart.destroy();
+  benchChart = new Chart(document.getElementById('bench-chart').getContext('2d'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        label: 'P50 latency (ms)',
+        data: vals,
+        backgroundColor: colors,
+        borderRadius: 4,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false, animation: false,
+      plugins: { legend: {display:false} },
+      scales: {
+        x: { ticks:{color:'#6B7280',font:{size:10}}, grid:{display:false} },
+        y: { ticks:{color:'#6B7280',callback:v=>v+'ms'}, grid:{color:'#1E1E22'},
+             title:{display:true,text:'ms',color:'#6B7280'} }
+      }
+    }
+  });
+}
+
+function resetBenchmark() {
+  if (benchPolling) { clearInterval(benchPolling); benchPolling = null; }
+  completeProgress('bench-progress');
+  document.getElementById('bench-progress').style.width = '0%';
+  document.getElementById('bench-results').style.display = 'none';
+  document.getElementById('speedup-callout').style.display = 'none';
+  document.getElementById('bench-chart-wrap').style.display = 'none';
+  document.getElementById('bench-status').textContent = 'Click to start the benchmark.';
+  const btn = document.getElementById('bench-btn');
+  btn.disabled = false; btn.textContent = '▶ Run Benchmark';
+  if (benchChart) { benchChart.destroy(); benchChart = null; }
+}
+
+// ── Demo B: Node Scaling ───────────────────────────────────────────────────────
+let scaleChartTime = null;
+let scaleChartCPS  = null;
+let selectedNodes  = 1;
+// Accumulated results across runs: node_count → {wall_clock_s, throughput_mbps}
+const scaleHistory = {};
+
+function selectNodes(n) {
+  selectedNodes = n;
+  document.querySelectorAll('.node-btn').forEach(b => {
+    b.classList.toggle('active', parseInt(b.dataset.n) === n);
+  });
+}
+
+async function runScaling() {
+  const btn = document.getElementById('scale-btn');
+  btn.disabled = true; btn.textContent = 'Running...';
+  document.getElementById('scale-status').textContent =
+    `Starting distributed benchmark on ${selectedNodes} node(s)…`;
+  animateProgress('scale-progress', 20000);
+
+  try {
+    // Start distributed benchmark on primary (coordinator)
+    const sr = await fetch(`/api/benchmark/distributed?node_count=${selectedNodes}`, {method:'POST'});
+    const sd = await sr.json();
+    if (sd.error) throw new Error(sd.error);
+
+    // Show assignments
+    if (sd.assignments) {
+      const asgn = sd.assignments.map(a => `${a.node_id}: chunks ${a.start}–${a.end}`).join(' | ');
+      document.getElementById('scale-status').textContent = `Running — ${asgn}`;
+    }
+
+    // Poll for result
+    let result = null;
+    for (let i = 0; i < 180; i++) {
+      await new Promise(r => setTimeout(r, 1000));
+      const pr = await fetch('/api/benchmark/distributed/result');
+      const pd = await pr.json();
+      if (pd.status === 'complete') { result = pd; break; }
+      if (pd.status === 'error') throw new Error(pd.error || 'distributed benchmark error');
+    }
+
+    completeProgress('scale-progress');
+
+    if (!result) throw new Error('Timed out waiting for benchmark result');
+
+    // Store result
+    scaleHistory[result.node_count] = {
+      wall_clock_s:    result.wall_clock_s,
+      throughput_mbps: result.aggregate_mbps,
+    };
+
+    document.getElementById('scale-status').textContent =
+      `${result.node_count} node(s) — ${result.wall_clock_s}s · ` +
+      `${result.aggregate_mbps} MB/s aggregate · ${result.total_mb}MB read`;
+
+    renderScaleCharts();
+
+  } catch(e) {
+    document.getElementById('scale-status').textContent = 'Error: ' + e.message;
+  } finally {
+    btn.disabled = false; btn.textContent = '▶ Run Scaling Test';
+  }
+}
+
+function renderScaleCharts() {
+  const entries = Object.entries(scaleHistory)
+    .sort((a, b) => parseInt(a[0]) - parseInt(b[0]));
+  const labels  = entries.map(([n]) => `${n} node${n>1?'s':''}`);
+  const times   = entries.map(([, v]) => v.wall_clock_s);
+  const cpsList = entries.map(([, v]) => v.throughput_mbps);
+  const colors  = entries.map((_, i) => `hsl(${200 + i*25},65%,${48+i*6}%)`);
+
+  const chartOpts = (title, unit) => ({
+    responsive: true, maintainAspectRatio: false, animation: false,
+    plugins: { legend: {display:false} },
+    scales: {
+      x: { ticks:{color:'#6B7280',font:{size:10}}, grid:{display:false} },
+      y: { ticks:{color:'#6B7280'}, grid:{color:'#1E1E22'},
+           title:{display:true,text:unit,color:'#6B7280'} }
+    }
+  });
+
+  if (scaleChartTime) scaleChartTime.destroy();
+  scaleChartTime = new Chart(document.getElementById('scale-chart-time').getContext('2d'), {
+    type: 'bar',
+    data: { labels, datasets: [{label:'Wall-clock (s)', data:times, backgroundColor:colors, borderRadius:4}] },
+    options: chartOpts('Wall-clock time', 'seconds'),
+  });
+
+  if (scaleChartCPS) scaleChartCPS.destroy();
+  scaleChartCPS = new Chart(document.getElementById('scale-chart-cps').getContext('2d'), {
+    type: 'bar',
+    data: { labels, datasets: [{label:'MB/s', data:cpsList, backgroundColor:colors, borderRadius:4}] },
+    options: chartOpts('Aggregate throughput', 'MB/s'),
+  });
+}
+
+function resetScaling() {
+  completeProgress('scale-progress');
+  document.getElementById('scale-progress').style.width = '0%';
+  document.getElementById('scale-status').textContent = 'Select node count, then run.';
+  const btn = document.getElementById('scale-btn');
+  btn.disabled = false; btn.textContent = '▶ Run Scaling Test';
+  // Keep scaleHistory so accumulated bars remain — clear charts if desired
+}
+
+// ── Demo C: Distributed Sort ────────────────────────────────────────────────────
+async function runSort() {
+  const btn = document.getElementById('sort-btn');
+  btn.disabled = true; btn.textContent = 'Sorting...';
+  document.getElementById('sort-status').textContent = 'Starting distributed sort...';
+  document.getElementById('sort-result').style.display = 'none';
+
+  // Reset phases
+  ['gen','part','sort','total'].forEach(p => {
+    const el = document.getElementById(`phase-${p}`);
+    if (el) el.className = 'phase';
+    const t = document.getElementById(`t-${p}`);
+    if (t) t.textContent = '—';
+  });
+
+  animateProgress('sort-progress', 60000);
+
+  try {
+    const r = await fetch('/api/sort/run', {method:'POST'});
+    const d = await r.json();
+    if (d.error) throw new Error(d.error);
+
+    document.getElementById('sort-status').textContent =
+      `Running sort across ${d.node_count} node(s)…`;
+
+    // Mark phases running as they start
+    setPhaseState('gen', 'running');
+
+    // Poll for result
+    let result = null;
+    for (let i = 0; i < 360; i++) {
+      await new Promise(r => setTimeout(r, 500));
+      const pr = await fetch('/api/sort/result');
+      const pd = await pr.json();
+      updateSortPhases(pd.phases || {});
+      if (pd.status === 'complete') { result = pd; break; }
+      if (pd.status === 'error') throw new Error(pd.error || 'sort error');
+    }
+
+    completeProgress('sort-progress');
+
+    if (!result) throw new Error('Timed out waiting for sort result');
+    showSortResult(result);
+
+  } catch(e) {
+    document.getElementById('sort-status').textContent = 'Error: ' + e.message;
+  } finally {
+    btn.disabled = false; btn.textContent = '▶ Run Again';
+  }
+}
+
+function resetSort() {
+  completeProgress('sort-progress');
+  document.getElementById('sort-progress').style.width = '0%';
+  document.getElementById('sort-status').textContent = 'Ready. Will sort ~50MB across all connected nodes.';
+  document.getElementById('sort-result').style.display = 'none';
+  ['gen','part','sort','total'].forEach(p => {
+    const el = document.getElementById(`phase-${p}`);
+    if (el) el.className = 'phase';
+    const t = document.getElementById(`t-${p}`);
+    if (t) t.textContent = '—';
+  });
+  const btn = document.getElementById('sort-btn');
+  btn.disabled = false; btn.textContent = '▶ Start Distributed Sort';
+}
+
+function setPhaseState(name, state) {
+  const el = document.getElementById(`phase-${name}`);
+  const t  = document.getElementById(`t-${name}`);
+  if (!el) return;
+  el.className = `phase ${state}`;
+  if (state === 'running' && t) t.textContent = '...';
+}
+
+function updateSortPhases(phases) {
+  // phases: {gen:{running,done,time_s}, part:{...}, sort:{...}}
+  const map = {gen:'gen', part:'part', sort:'sort'};
+  Object.entries(map).forEach(([key, id]) => {
+    const info = phases[key];
+    if (!info) return;
+    const el = document.getElementById(`phase-${id}`);
+    const t  = document.getElementById(`t-${id}`);
+    if (!el) return;
+    el.className = 'phase' + (info.done ? ' done' : info.running ? ' running' : '');
+    if (t) {
+      t.textContent = info.done
+        ? (info.time_s != null ? info.time_s.toFixed(2)+'s' : '—')
+        : info.running ? '...' : '—';
+    }
+  });
+}
+
+function showSortResult(d) {
+  const total = d.total_s != null ? d.total_s.toFixed(2) : '?';
+  const mb    = d.mb_sorted || (d.node_count * 50);
+  const n     = d.node_count || '?';
+  document.getElementById('sort-status').textContent =
+    `Sort complete — ${total}s total · ${mb}MB across ${n} node(s)`;
+
+  // Update total phase display
+  const ptotal = document.getElementById('phase-total');
+  if (ptotal) ptotal.className = 'phase done';
+  const ttotal = document.getElementById('t-total');
+  if (ttotal) ttotal.textContent = total + 's';
+
+  const el = document.getElementById('sort-result');
+  el.style.display = 'block';
+  el.textContent =
+    `✓ ${mb}MB sorted in ${total}s across ${n} node(s) · Mirrors DeepSeek GraySort at demo scale`;
+}
+</script>
+</body>
+</html>

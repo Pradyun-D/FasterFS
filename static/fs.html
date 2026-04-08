@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>FasterFS — Explorer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@700;900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0D0D0F;--bg-card:#151518;--bg-inset:#1A1A1E;
+  --text:#F3F4F6;--muted:#6B7280;--border:#27272A;
+  --red:#D4232A;--shadow:rgba(0,0,0,.4);
+  --mono:'JetBrains Mono',monospace;--head:'Inter',sans-serif;
+}
+html{font-size:13px;-webkit-font-smoothing:antialiased}
+body{background:var(--bg);color:var(--text);font-family:var(--head);min-height:100vh}
+::-webkit-scrollbar{width:5px}
+::-webkit-scrollbar-track{background:var(--bg)}
+::-webkit-scrollbar-thumb{background:#333;border-radius:3px}
+header{
+  position:sticky;top:0;z-index:200;
+  display:flex;align-items:center;gap:1.2rem;flex-wrap:wrap;
+  padding:.55rem 1.4rem;background:#111;
+  border-bottom:1px solid #222;box-shadow:0 2px 8px rgba(0,0,0,.25);
+}
+.logo{
+  font-family:'DM Sans','Inter',sans-serif;font-size:1.3rem;font-weight:900;
+  letter-spacing:-.03em;white-space:nowrap;
+  background:linear-gradient(90deg,#22D3EE 0%,#06B6D4 50%,#0891B2 100%);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+}
+.logo em{
+  background:linear-gradient(90deg,#7C3AED 0%,#EC4899 100%);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+  font-style:normal;font-weight:900;
+}
+nav a{
+  font-size:.72rem;font-weight:600;letter-spacing:.04em;
+  color:#9CA3AF;text-decoration:none;
+  padding:.3rem .7rem;border-radius:4px;border:1px solid transparent;margin-right:.2rem;
+  transition:all .15s;
+}
+nav a:hover{color:#fff;border-color:#333}
+nav a.active{color:#fff;background:#1e1e22;border-color:#444}
+.hdr-right{display:flex;gap:.8rem;align-items:center;margin-left:auto}
+.btn{
+  font-size:.72rem;font-weight:600;letter-spacing:.04em;cursor:pointer;
+  color:#fff;background:#D4232A;border:none;border-radius:5px;
+  padding:.32rem .9rem;transition:all .15s;white-space:nowrap;
+}
+.btn:hover{background:#B81D23}
+.btn-sm{font-size:.65rem;padding:.22rem .6rem;background:#27272A;color:#9CA3AF;border:1px solid #333}
+.btn-sm:hover{background:#333;color:#fff}
+
+.page{display:grid;grid-template-columns:320px 1fr;gap:1rem;padding:1rem 1.4rem;max-width:1300px;margin:0 auto}
+@media(max-width:800px){.page{grid-template-columns:1fr}}
+.card{
+  background:var(--bg-card);border:1px solid var(--border);
+  border-radius:8px;padding:.85rem .95rem;
+  box-shadow:0 1px 4px var(--shadow);overflow:hidden;
+}
+.ctitle{
+  font-size:.65rem;font-weight:600;color:var(--muted);
+  letter-spacing:.1em;text-transform:uppercase;
+  margin-bottom:.65rem;padding-bottom:.35rem;
+  border-bottom:1px solid var(--border);
+  display:flex;align-items:center;gap:.4rem;
+}
+
+/* Tree */
+.tree{font-family:var(--mono);font-size:.75rem;line-height:1.9}
+.tree-node{
+  display:flex;align-items:center;gap:.4rem;
+  padding:.15rem .3rem;border-radius:3px;cursor:pointer;
+  transition:background .12s;
+}
+.tree-node:hover{background:#1E1E22}
+.tree-icon{color:#6B7280;flex-shrink:0;width:14px;text-align:center}
+.tree-name{color:var(--text)}
+.tree-meta{color:#4B5563;font-size:.65rem;margin-left:auto}
+.tree-indent{padding-left:1rem}
+
+/* Chunk list */
+.chunk-list{max-height:400px;overflow-y:auto}
+.chunk-row{
+  display:flex;align-items:center;gap:.5rem;
+  padding:.3rem .4rem;border-bottom:1px solid var(--border);
+  font-family:var(--mono);font-size:.72rem;
+}
+.chunk-row:last-child{border-bottom:none}
+.chunk-id{color:var(--muted);width:80px;flex-shrink:0}
+.chunk-size{color:#6B7280;width:60px;flex-shrink:0}
+.chunk-cached{
+  font-size:.62rem;padding:.08rem .3rem;border-radius:3px;
+  background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.25);color:#22C55E;
+}
+.chunk-cold{
+  font-size:.62rem;padding:.08rem .3rem;border-radius:3px;
+  background:#1E1E22;border:1px solid #333;color:#6B7280;
+}
+
+/* Cluster panel */
+.node-card{
+  background:#0F0F12;border:1px solid #222;border-radius:5px;
+  padding:.6rem .7rem;margin-bottom:.5rem;
+}
+.node-name{font-weight:700;font-size:.82rem;color:var(--text)}
+.node-detail{font-size:.68rem;color:var(--muted);margin-top:.2rem;font-family:var(--mono)}
+.node-badges{display:flex;gap:.3rem;margin-top:.35rem;flex-wrap:wrap}
+.badge{
+  font-size:.6rem;letter-spacing:.05em;padding:.08rem .3rem;border-radius:3px;
+}
+.badge-ebpf{background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.3);color:#22C55E}
+.badge-cache{background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.3);color:#F59E0B}
+.badge-primary{background:rgba(34,211,238,.1);border:1px solid rgba(34,211,238,.3);color:#22D3EE}
+
+/* Stats row */
+.stat-row{display:flex;justify-content:space-between;padding:.3rem 0;border-bottom:1px solid var(--border);font-size:.73rem}
+.stat-row:last-child{border-bottom:none}
+.stat-label{color:var(--muted)}
+.stat-val{font-family:var(--mono);font-weight:600}
+
+.refresh-btn{float:right;margin-top:-.1rem}
+</style>
+</head>
+<body>
+<header>
+  <span class="logo">Faster<em>FS</em></span>
+  <nav>
+    <a href="/">Dashboard</a>
+    <a href="/kernel">Kernel</a>
+    <a href="/demos">Demos</a>
+    <a href="/fs" class="active">Explorer</a>
+    <a href="/notebook">Notebook</a>
+  </nav>
+  <div class="hdr-right">
+    <button class="btn" onclick="refresh()">↻ Refresh</button>
+  </div>
+</header>
+
+<div class="page">
+  <!-- Left: cluster nodes -->
+  <div style="display:flex;flex-direction:column;gap:1rem">
+
+    <div class="card">
+      <div class="ctitle">Cluster Nodes <button class="btn btn-sm refresh-btn" onclick="loadCluster()">↻</button></div>
+      <div id="cluster-nodes">Loading...</div>
+    </div>
+
+    <div class="card">
+      <div class="ctitle">MinIO Bucket Stats</div>
+      <div id="minio-stats">Loading...</div>
+    </div>
+
+    <div class="card">
+      <div class="ctitle">Local Cache — This Node</div>
+      <div id="local-cache-stats">Loading...</div>
+    </div>
+
+  </div>
+
+  <!-- Right: file tree -->
+  <div style="display:flex;flex-direction:column;gap:1rem">
+
+    <div class="card">
+      <div class="ctitle">MinIO Object Store — fasterfs bucket</div>
+      <div style="font-size:.72rem;color:var(--muted);margin-bottom:.5rem" id="minio-count">Loading...</div>
+      <div class="chunk-list" id="file-list">Loading...</div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+async function loadCluster() {
+  try {
+    const r = await fetch('/api/cluster');
+    const d = await r.json();
+    const el = document.getElementById('cluster-nodes');
+    el.innerHTML = d.nodes.map(n => `
+      <div class="node-card">
+        <div class="node-name">${n.hostname}</div>
+        <div class="node-detail">${n.ip}:${n.port} · ${n.os}</div>
+        <div class="node-badges">
+          ${n.is_primary ? '<span class="badge badge-primary">PRIMARY</span>' : ''}
+          ${n.ebpf_enabled ? '<span class="badge badge-ebpf">eBPF LIVE</span>' : '<span class="badge badge-cache">cache-only</span>'}
+        </div>
+      </div>
+    `).join('') || '<span style="color:var(--muted);font-size:.75rem">No nodes</span>';
+  } catch(e) {
+    document.getElementById('cluster-nodes').textContent = 'Error: ' + e.message;
+  }
+}
+
+async function loadFiles() {
+  try {
+    const r = await fetch('/api/fs/files');
+    const d = await r.json();
+
+    document.getElementById('minio-count').textContent =
+      `${d.minio_count} objects in MinIO · ${d.cached_count} locally cached on ${d.node_id}`;
+
+    // File list
+    const cachedNames = new Set((d.local_cache || []).map(c => c.name));
+    const rows = (d.minio_objects || []).map(obj => {
+      const name = obj.key.split('/').pop();
+      const kb = (obj.size / 1024).toFixed(0);
+      const cached = cachedNames.has(name);
+      return `<div class="chunk-row">
+        <span class="chunk-id">${obj.key.replace('lobster/','')}</span>
+        <span class="chunk-size">${kb} KB</span>
+        <span class="${cached ? 'chunk-cached' : 'chunk-cold'}">${cached ? '✓ cached' : 'cold'}</span>
+      </div>`;
+    });
+    document.getElementById('file-list').innerHTML = rows.join('') || 'No objects found.';
+
+    // Minio stats
+    const totalMB = (d.minio_objects || []).reduce((s,o) => s + o.size, 0) / (1024*1024);
+    document.getElementById('minio-stats').innerHTML = `
+      <div class="stat-row"><span class="stat-label">Objects</span><span class="stat-val">${d.minio_count}</span></div>
+      <div class="stat-row"><span class="stat-label">Total size</span><span class="stat-val">${totalMB.toFixed(1)} MB</span></div>
+      <div class="stat-row"><span class="stat-label">Bucket</span><span class="stat-val">fasterfs</span></div>
+      <div class="stat-row"><span class="stat-label">Endpoint</span><span class="stat-val" style="font-size:.65rem">127.0.0.1:9000</span></div>
+    `;
+
+    // Local cache stats
+    const cachedMB = (d.local_cache || []).reduce((s,c) => s + c.size, 0) / (1024*1024);
+    document.getElementById('local-cache-stats').innerHTML = `
+      <div class="stat-row"><span class="stat-label">Cached chunks</span><span class="stat-val" style="color:#22C55E">${d.cached_count}</span></div>
+      <div class="stat-row"><span class="stat-label">Cache size</span><span class="stat-val">${cachedMB.toFixed(1)} MB</span></div>
+      <div class="stat-row"><span class="stat-label">Hit rate</span><span class="stat-val">${d.minio_count > 0 ? ((d.cached_count/d.minio_count)*100).toFixed(0) : 0}%</span></div>
+      <div class="stat-row"><span class="stat-label">Cache path</span><span class="stat-val" style="font-size:.65rem">/tmp/fasterfs_cache/</span></div>
+    `;
+  } catch(e) {
+    document.getElementById('file-list').textContent = 'Error: ' + e.message;
+  }
+}
+
+function refresh() { loadCluster(); loadFiles(); }
+
+window.addEventListener('load', () => { loadCluster(); loadFiles(); setInterval(refresh, 10000); });
+</script>
+</body>
+</html>

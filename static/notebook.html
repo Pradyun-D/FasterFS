@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>FasterFS — Notebook</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@700;900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0D0D0F;--bg-card:#151518;
+  --text:#F3F4F6;--muted:#6B7280;--border:#27272A;
+  --mono:'JetBrains Mono',monospace;--head:'Inter',sans-serif;
+}
+html,body{height:100%;font-size:13px;-webkit-font-smoothing:antialiased}
+body{background:var(--bg);color:var(--text);font-family:var(--head);display:flex;flex-direction:column}
+header{
+  flex-shrink:0;
+  display:flex;align-items:center;gap:1.2rem;flex-wrap:wrap;
+  padding:.55rem 1.4rem;background:#111;
+  border-bottom:1px solid #222;
+}
+.logo{
+  font-family:'DM Sans','Inter',sans-serif;font-size:1.3rem;font-weight:900;
+  letter-spacing:-.03em;
+  background:linear-gradient(90deg,#22D3EE 0%,#06B6D4 50%,#0891B2 100%);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+}
+.logo em{
+  background:linear-gradient(90deg,#7C3AED 0%,#EC4899 100%);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+  font-style:normal;font-weight:900;
+}
+nav a{
+  font-size:.72rem;font-weight:600;letter-spacing:.04em;
+  color:#9CA3AF;text-decoration:none;
+  padding:.3rem .7rem;border-radius:4px;border:1px solid transparent;margin-right:.2rem;
+}
+nav a:hover{color:#fff;border-color:#333}
+nav a.active{color:#fff;background:#1e1e22;border-color:#444}
+.hdr-right{display:flex;gap:.8rem;align-items:center;margin-left:auto}
+.btn{
+  font-size:.72rem;font-weight:600;cursor:pointer;
+  color:#fff;background:#D4232A;border:none;border-radius:5px;
+  padding:.32rem .9rem;transition:all .15s;
+}
+.btn:hover{background:#B81D23}
+.btn-ghost{background:transparent;border:1px solid #333;color:#9CA3AF}
+.btn-ghost:hover{background:#1e1e22;color:#fff}
+
+/* Tabs */
+.tab-bar{
+  flex-shrink:0;display:flex;gap:0;
+  background:#111;border-bottom:1px solid #222;padding:0 1.4rem;
+}
+.tab{
+  font-size:.75rem;font-weight:600;letter-spacing:.03em;
+  padding:.55rem 1rem;cursor:pointer;color:#6B7280;
+  border-bottom:2px solid transparent;transition:all .15s;
+}
+.tab:hover{color:#fff}
+.tab.active{color:#22D3EE;border-bottom-color:#22D3EE}
+
+/* Main content area */
+.main{flex:1;display:flex;overflow:hidden}
+
+/* Sidebar */
+.sidebar{
+  width:280px;flex-shrink:0;
+  background:#111;border-right:1px solid #222;
+  padding:.8rem;overflow-y:auto;display:flex;flex-direction:column;gap:.5rem;
+}
+.snippet-btn{
+  width:100%;text-align:left;
+  background:#151518;border:1px solid #27272A;border-radius:5px;
+  padding:.5rem .7rem;cursor:pointer;font-family:var(--head);
+  transition:all .12s;
+}
+.snippet-btn:hover{background:#1E1E22;border-color:#444}
+.snippet-title{font-size:.75rem;font-weight:600;color:var(--text)}
+.snippet-desc{font-size:.67rem;color:var(--muted);margin-top:.15rem}
+
+/* iframe */
+.iframe-wrap{flex:1;position:relative;background:#1a1a1e}
+iframe{width:100%;height:100%;border:none;display:block}
+
+/* Not available message */
+.not-available{
+  flex:1;display:flex;align-items:center;justify-content:center;
+  flex-direction:column;gap:.8rem;color:var(--muted);
+}
+.not-available h2{font-size:1.1rem;color:var(--text)}
+.not-available p{font-size:.8rem;max-width:420px;text-align:center;line-height:1.6}
+.not-available code{
+  font-family:var(--mono);font-size:.75rem;
+  background:#151518;border:1px solid #27272A;
+  padding:.6rem 1rem;border-radius:5px;display:block;
+  text-align:left;color:#22D3EE;white-space:pre;
+}
+</style>
+</head>
+<body>
+<header>
+  <span class="logo">Faster<em>FS</em></span>
+  <nav>
+    <a href="/">Dashboard</a>
+    <a href="/kernel">Kernel</a>
+    <a href="/demos">Demos</a>
+    <a href="/fs">Explorer</a>
+    <a href="/notebook" class="active">Notebook</a>
+  </nav>
+  <div class="hdr-right">
+    <span id="jupyter-status" style="font-size:.72rem;color:#6B7280">Checking JupyterLab...</span>
+    <button class="btn btn-ghost" onclick="checkJupyter()">↻ Refresh</button>
+  </div>
+</header>
+
+<div class="tab-bar">
+  <div class="tab active" onclick="showTab('free')" id="tab-free">Free-form</div>
+  <div class="tab" onclick="showTab('scripted')" id="tab-scripted">Pre-scripted</div>
+</div>
+
+<div class="main" id="main-area">
+  <!-- populated by JS -->
+</div>
+
+<script>
+let jupyterAvailable = false;
+const JUPYTER_URL = `http://${location.hostname}:8888`;
+
+async function checkJupyter() {
+  const status = document.getElementById('jupyter-status');
+  status.textContent = 'Checking...';
+  try {
+    const r = await fetch(JUPYTER_URL + '/api', {mode:'no-cors'});
+    jupyterAvailable = true;
+    status.textContent = 'JupyterLab online';
+    status.style.color = '#22C55E';
+  } catch(e) {
+    jupyterAvailable = false;
+    status.textContent = 'JupyterLab offline';
+    status.style.color = '#F59E0B';
+  }
+  renderTab(currentTab);
+}
+
+let currentTab = 'free';
+
+function showTab(tab) {
+  currentTab = tab;
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('tab-' + tab).classList.add('active');
+  renderTab(tab);
+}
+
+function renderTab(tab) {
+  const main = document.getElementById('main-area');
+  if (tab === 'free') {
+    if (jupyterAvailable) {
+      main.innerHTML = `<div class="iframe-wrap"><iframe src="${JUPYTER_URL}/lab" allowfullscreen></iframe></div>`;
+    } else {
+      main.innerHTML = `
+        <div class="not-available">
+          <h2>JupyterLab Not Running</h2>
+          <p>Start JupyterLab on the primary node to enable the interactive notebook:</p>
+          <code>jupyter lab --no-browser --port 8888 \\
+  --NotebookApp.token='' \\
+  --NotebookApp.allow_origin='*' \\
+  --ServerApp.allow_origin='*' &</code>
+          <p>Then click Refresh above.</p>
+          <p style="margin-top:.5rem">Or install JupyterLab first:</p>
+          <code>pip3 install jupyterlab</code>
+        </div>`;
+    }
+  } else {
+    // Pre-scripted tab — always show sidebar + iframe (or placeholder)
+    const snippets = [
+      {title:'1. Benchmark comparison', desc:'Run MinIO vs FasterFS, plot results', code: benchmarkCode()},
+      {title:'2. Cache warmup', desc:'Watch latency drop as cache fills', code: warmupCode()},
+      {title:'3. Shared file across nodes', desc:'Write on primary, read from any node', code: sharedFileCode()},
+      {title:'4. eBPF stats', desc:'Fetch and plot live kernel metrics', code: ebpfCode()},
+    ];
+
+    let snippetBtns = snippets.map((s,i) => `
+      <button class="snippet-btn" onclick="loadSnippet(${i})">
+        <div class="snippet-title">${s.title}</div>
+        <div class="snippet-desc">${s.desc}</div>
+      </button>`).join('');
+
+    if (jupyterAvailable) {
+      main.innerHTML = `
+        <div class="sidebar">${snippetBtns}</div>
+        <div class="iframe-wrap" id="nb-frame">
+          <iframe id="jupyter-frame" src="${JUPYTER_URL}/lab" allowfullscreen></iframe>
+        </div>`;
+    } else {
+      main.innerHTML = `
+        <div class="sidebar">${snippetBtns}</div>
+        <div class="not-available" style="flex:1">
+          <h2>JupyterLab Not Running</h2>
+          <p>Click a snippet to see the code. Start JupyterLab to run it interactively.</p>
+          <code id="snippet-display" style="max-width:600px;overflow-x:auto"># Select a snippet from the left</code>
+        </div>`;
+    }
+    window._snippets = snippets;
+  }
+}
+
+function loadSnippet(i) {
+  const s = window._snippets[i];
+  if (jupyterAvailable) {
+    // In a full JupyterLab, you'd use the API to create a notebook — for now, show code
+    const display = document.getElementById('snippet-display');
+    if (display) display.textContent = s.code;
+  } else {
+    const display = document.getElementById('snippet-display');
+    if (display) display.textContent = s.code;
+  }
+}
+
+function benchmarkCode() {
+  return `import requests, matplotlib.pyplot as plt
+
+r = requests.post("http://localhost:8000/api/benchmark/run")
+import time; time.sleep(30)
+d = requests.get("http://localhost:8000/api/benchmark/result").json()
+
+b = d["result"]["backends"]
+names = list(b.keys())
+p50s = [b[k]["p50_ms"] for k in names]
+
+plt.bar(names, p50s, color=["gray","steelblue","green"])
+plt.ylabel("P50 latency (ms)")
+plt.title("FasterFS Benchmark")
+plt.show()
+print(f"Speedup: {d['result']['speedup_vs_minio']}x")`;
+}
+
+function warmupCode() {
+  return `import requests, time, matplotlib.pyplot as plt
+
+lats = []
+for i in range(50):
+    s = requests.get("http://localhost:8000/api/ebpf/stats").json()
+    lats.append(s["avg_lat_us"])
+    time.sleep(0.5)
+
+plt.plot(lats)
+plt.xlabel("Sample")
+plt.ylabel("Avg latency (μs)")
+plt.title("Latency as cache warms up")
+plt.axhline(min(lats), color="green", linestyle="--", label=f"min={min(lats):.1f}μs")
+plt.legend()
+plt.show()`;
+}
+
+function sharedFileCode() {
+  return `# Run this on the primary node — all nodes share MinIO
+import boto3
+
+s3 = boto3.client("s3",
+    endpoint_url="http://127.0.0.1:9000",
+    aws_access_key_id="admin",
+    aws_secret_access_key="adminpass123")
+
+# Write
+s3.put_object(Bucket="fasterfs", Key="shared/hello.txt",
+    Body=b"Hello from primary node!")
+
+# Read from any node
+obj = s3.get_object(Bucket="fasterfs", Key="shared/hello.txt")
+print(obj["Body"].read().decode())`;
+}
+
+function ebpfCode() {
+  return `import requests, matplotlib.pyplot as plt
+
+s = requests.get("http://localhost:8000/api/ebpf/stats").json()
+print(f"Reads: {s['reads']}")
+print(f"Hot events: {s['hot_events']}")
+print(f"Avg latency: {s['avg_lat_us']:.1f} μs")
+print(f"Cache hit: {s['cache_hit_pct']:.1f}%")
+print(f"eBPF mode: {'LIVE' if not s['simulation'] else 'SIMULATION'}")
+
+h = requests.get("http://localhost:8000/api/ebpf/histogram").json()
+if "buckets" in h:
+    plt.bar(h["labels"], h["counts"])
+    plt.title("eBPF Latency Histogram")
+    plt.ylabel("Count")
+    plt.show()`;
+}
+
+window.addEventListener('load', () => { renderTab('free'); checkJupyter(); });
+</script>
+</body>
+</html>

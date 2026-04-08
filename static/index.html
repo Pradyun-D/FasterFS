@@ -1,0 +1,681 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>FasterFS — eBPF Storage Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@700;900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+
+:root {
+  --bg:        #F3F4F6;
+  --bg-card:   #FFFFFF;
+  --bg-inset:  #EBEBEB;
+  --text:      #111111;
+  --muted:     #6B7280;
+  --amber:     #111111;
+  --gold:      #D4232A;
+  --border:    #E5E7EB;
+  --border-dk: #9CA3AF;
+  --red:       #D4232A;
+  --green:     #16A34A;
+  --shadow:    rgba(0,0,0,0.07);
+  --mono:      'JetBrains Mono',monospace;
+  --head:      'Inter',sans-serif;
+  --body:      'Inter',sans-serif;
+}
+
+html{font-size:13px;-webkit-font-smoothing:antialiased}
+
+body {
+  background-color: var(--bg);
+  color: var(--text);
+  font-family: var(--body);
+  min-height: 100vh;
+}
+
+/* scrollbar */
+::-webkit-scrollbar{width:5px}
+::-webkit-scrollbar-track{background:var(--bg)}
+::-webkit-scrollbar-thumb{background:var(--amber);border-radius:3px}
+
+/* ── Header ──────────────────────────────────────────────────────── */
+header {
+  position:sticky;top:0;z-index:200;
+  display:flex;align-items:center;gap:1.2rem;flex-wrap:wrap;
+  padding:.55rem 1.4rem;
+  background:#111111;
+  border-bottom:1px solid #222;
+  box-shadow:0 2px 8px rgba(0,0,0,.25);
+}
+
+.logo {
+  font-family:'DM Sans','Inter',sans-serif;font-size:1.3rem;font-weight:900;
+  letter-spacing:-.03em;
+  white-space:nowrap;
+  background:linear-gradient(90deg,#22D3EE 0%,#06B6D4 50%,#0891B2 100%);
+  -webkit-background-clip:text;
+  -webkit-text-fill-color:transparent;
+  background-clip:text;
+  filter:drop-shadow(0 2px 8px rgba(6,182,212,.25));
+}
+.logo em{
+  background:linear-gradient(90deg,#7C3AED 0%,#EC4899 100%);
+  -webkit-background-clip:text;
+  -webkit-text-fill-color:transparent;
+  background-clip:text;
+  font-style:normal;
+  font-weight:900;
+  filter:drop-shadow(0 2px 8px rgba(236,72,153,.3));
+}
+
+.pill {
+  display:flex;align-items:center;gap:.35rem;
+  font-size:.7rem;color:#9CA3AF;letter-spacing:.04em;
+  background:rgba(255,255,255,.07);
+  border:1px solid rgba(255,255,255,.12);
+  border-radius:4px;padding:.18rem .5rem;
+  white-space:nowrap;
+}
+.dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.dot-green{background:#22C55E;box-shadow:0 0 6px rgba(34,197,94,.7);animation:blink 2s infinite}
+.dot-amber{background:#F59E0B;animation:blink 1.5s infinite}
+.dot-red  {background:var(--red)}
+.dot-grey {background:#6B7280}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.35}}
+
+.hdr-right{display:flex;gap:.8rem;align-items:center;margin-left:auto;flex-wrap:wrap}
+
+.btn {
+  font-family:var(--head);font-size:.72rem;font-weight:600;
+  letter-spacing:.04em;cursor:pointer;
+  color:#fff;
+  background:var(--gold);
+  border:none;border-radius:5px;
+  padding:.34rem .9rem;
+  box-shadow:0 1px 3px rgba(0,0,0,.3);
+  transition:all .15s;white-space:nowrap;
+}
+.btn:hover{background:#B81D23;transform:translateY(-1px)}
+.btn:active{transform:translateY(0)}
+.btn:disabled{opacity:.5;cursor:not-allowed;transform:none}
+
+/* ── Layout ──────────────────────────────────────────────────────── */
+.grid {
+  display:grid;
+  grid-template-columns:320px 1fr 320px;
+  grid-template-rows:auto;
+  gap:.9rem;
+  padding:1rem 1.4rem;
+  max-width:1560px;margin:0 auto;
+}
+
+.card {
+  background:var(--bg-card);
+  border:1px solid var(--border);
+  border-radius:8px;
+  padding:.85rem .95rem;
+  box-shadow:0 1px 4px var(--shadow);
+  overflow:hidden;
+}
+
+.ctitle {
+  font-family:var(--head);font-size:.65rem;font-weight:600;
+  color:var(--muted);letter-spacing:.1em;text-transform:uppercase;
+  margin-bottom:.65rem;padding-bottom:.35rem;
+  border-bottom:1px solid var(--border);
+  display:flex;align-items:center;gap:.4rem;
+}
+
+.badge {
+  display:inline-block;font-size:.6rem;font-family:var(--head);
+  letter-spacing:.06em;
+  background:rgba(212,35,42,.08);border:1px solid rgba(212,35,42,.2);
+  color:var(--gold);padding:.08rem .3rem;border-radius:3px;
+  margin-left:.3rem;
+}
+
+/* ── Order Book ──────────────────────────────────────────────────── */
+.ob-mid{
+  text-align:center;margin:.3rem 0 .5rem;padding:.4rem;
+  background:var(--bg-inset);border:1px solid var(--border);border-radius:5px;
+}
+.ob-mid-price{
+  font-family:var(--mono);font-size:1.5rem;font-weight:700;
+  color:var(--text);
+}
+.ob-meta{font-size:.68rem;color:var(--muted);margin-top:.15rem}
+
+.ob-table{width:100%;border-collapse:collapse;font-size:.78rem}
+.ob-table th{
+  font-family:var(--head);font-size:.58rem;color:var(--muted);
+  letter-spacing:.15em;text-transform:uppercase;
+  padding:.25rem .3rem;border-bottom:1px solid var(--border);
+  text-align:center;
+}
+.ob-table td{padding:.18rem .3rem;text-align:center}
+.ob-table .ask-price{color:var(--red);font-weight:700}
+.ob-table .bid-price{color:var(--green);font-weight:700}
+.ob-table .sz{color:var(--muted);font-size:.72rem}
+
+/* ── Storage Perf chart ──────────────────────────────────────────── */
+.span2{grid-column:span 2}
+
+/* ── Metrics strip ───────────────────────────────────────────────── */
+.metrics-strip{
+  grid-column:1/-1;
+  display:grid;
+  grid-template-columns:repeat(4,1fr);
+  gap:.9rem;
+}
+
+.big-num{
+  font-family:var(--mono);font-size:1.7rem;font-weight:700;
+  color:var(--text);
+  line-height:1;
+}
+.metric-lbl{font-size:.62rem;color:var(--muted);letter-spacing:.12em;text-transform:uppercase;margin-top:.2rem}
+.metric-sub{font-size:.68rem;color:var(--muted);margin-top:.1rem}
+
+.pbar-wrap{height:5px;background:var(--bg-inset);border-radius:3px;margin-top:.4rem;overflow:hidden}
+.pbar{height:100%;background:var(--gold);border-radius:3px;transition:width .9s ease}
+
+/* ── Bottom row ─────────────────────────────────────────────────── */
+.bottom{grid-column:1/-1;display:grid;grid-template-columns:1fr 1fr 1fr;gap:.9rem}
+
+/* ── Ref latency table ──────────────────────────────────────────── */
+.rtable{width:100%;border-collapse:collapse;font-size:.75rem}
+.rtable th{font-family:var(--head);font-size:.58rem;color:var(--muted);letter-spacing:.12em;
+  text-transform:uppercase;padding:.25rem .35rem;border-bottom:1px solid var(--border);text-align:left}
+.rtable td{padding:.22rem .35rem;border-bottom:1px solid rgba(204,186,128,.35)}
+.rtable td:first-child{font-family:var(--head);font-size:.62rem;color:var(--amber);letter-spacing:.06em}
+
+/* ── Speedup callout ────────────────────────────────────────────── */
+.speedup{
+  text-align:center;margin:.5rem 0 .3rem;
+}
+.speedup-num{
+  font-family:var(--mono);font-size:2rem;font-weight:700;
+  color:var(--text);
+}
+.speedup-lbl{font-size:.65rem;color:var(--muted);letter-spacing:.12em;margin-top:.15rem}
+
+/* ── Pass bars ──────────────────────────────────────────────────── */
+.pass-row{display:flex;align-items:center;gap:.6rem;margin:.3rem 0}
+.pass-lbl{font-size:.68rem;color:var(--muted);width:100px;flex-shrink:0}
+.pass-bar-wrap{flex:1;height:12px;background:var(--bg-inset);border-radius:3px;overflow:hidden;position:relative}
+.pass-bar{height:100%;border-radius:3px;transition:width 1.2s cubic-bezier(.34,1.56,.64,1);position:relative}
+.pass-bar.cold {background:#FCA5A5}
+.pass-bar.warm {background:#FCD34D}
+.pass-bar.hot  {background:#86EFAC}
+.pass-val{font-size:.72rem;color:var(--text);width:55px;flex-shrink:0;text-align:right}
+
+/* ── Chart wrap ─────────────────────────────────────────────────── */
+.cwrap{position:relative;width:100%}
+
+/* ── Responsive ─────────────────────────────────────────────────── */
+@media(max-width:1100px){
+  .grid{grid-template-columns:1fr 1fr}
+  .metrics-strip{grid-template-columns:repeat(2,1fr)}
+  .bottom{grid-template-columns:1fr 1fr}
+}
+@media(max-width:660px){
+  .grid{grid-template-columns:1fr}
+  .metrics-strip{grid-template-columns:1fr 1fr}
+  .bottom{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+
+<!-- ═══ HEADER ══════════════════════════════════════════════════════════════ -->
+<header>
+  <div class="logo">FASTER<em>FS</em></div>
+  <nav style="display:flex;gap:.3rem;margin-left:.5rem">
+    <a href="/" style="font-size:.72rem;font-weight:600;letter-spacing:.04em;color:#fff;text-decoration:none;padding:.3rem .7rem;border-radius:4px;background:#1e1e22;border:1px solid #444">Dashboard</a>
+    <a href="/kernel" style="font-size:.72rem;font-weight:600;letter-spacing:.04em;color:#9CA3AF;text-decoration:none;padding:.3rem .7rem;border-radius:4px;border:1px solid transparent">Kernel</a>
+    <a href="/demos" style="font-size:.72rem;font-weight:600;letter-spacing:.04em;color:#9CA3AF;text-decoration:none;padding:.3rem .7rem;border-radius:4px;border:1px solid transparent">Demos</a>
+    <a href="/fs" style="font-size:.72rem;font-weight:600;letter-spacing:.04em;color:#9CA3AF;text-decoration:none;padding:.3rem .7rem;border-radius:4px;border:1px solid transparent">Explorer</a>
+    <a href="/notebook" style="font-size:.72rem;font-weight:600;letter-spacing:.04em;color:#9CA3AF;text-decoration:none;padding:.3rem .7rem;border-radius:4px;border:1px solid transparent">Notebook</a>
+  </nav>
+
+  <div class="pill"><div class="dot dot-grey" id="ws-dot"></div><span id="ws-lbl">CONNECTING</span></div>
+  <div class="pill"><div class="dot dot-grey" id="minio-dot"></div><span id="minio-lbl">MinIO —</span></div>
+
+  <div class="hdr-right">
+    <div class="pill">AAPL · LOBSTER · <strong id="hdr-rows" style="color:#D4232A">—</strong> rows</div>
+    <div class="pill">Kernel 6.14 · TC eBPF · lo</div>
+    <button class="btn" id="btn-bench" onclick="runBench()">▶ BENCHMARK STORAGE</button>
+  </div>
+</header>
+
+<!-- ═══ GRID ════════════════════════════════════════════════════════════════ -->
+<div class="grid">
+
+  <!-- ── 1. Order Book ──────────────────────────────────────────────────── -->
+  <div class="card">
+    <div class="ctitle">AAPL Order Book <span class="badge" id="ob-badge">LIVE</span></div>
+
+    <div class="ob-mid">
+      <div class="ob-mid-price" id="ob-mid">$—</div>
+      <div class="ob-meta">
+        <span id="ob-spread">spread —</span> &nbsp;·&nbsp;
+        <span id="ob-time">—</span>
+      </div>
+    </div>
+
+    <table class="ob-table">
+      <thead>
+        <tr><th>ASK $</th><th>SIZE</th><th></th><th>SIZE</th><th>BID $</th></tr>
+      </thead>
+      <tbody id="ob-body"></tbody>
+    </table>
+    <div style="font-size:.62rem;color:var(--muted);margin-top:.5rem;text-align:right">
+      50-level LOBSTER book · 9:30–10:30 EST
+    </div>
+  </div>
+
+  <!-- ── 2. Mid-Price Chart ────────────────────────────────────────────── -->
+  <div class="card">
+    <div class="ctitle">AAPL Mid-Price (live replay)</div>
+    <div class="cwrap" style="height:230px"><canvas id="chart-price"></canvas></div>
+  </div>
+
+  <!-- ── 3. Storage Performance ───────────────────────────────────────── -->
+  <div class="card">
+    <div class="ctitle">Storage Read Performance</div>
+
+    <div class="speedup">
+      <div class="speedup-num" id="speedup-num">—</div>
+      <div class="speedup-lbl" id="speedup-lbl">RUN BENCHMARK TO MEASURE SPEEDUP</div>
+    </div>
+
+    <div id="pass-bars">
+      <div class="pass-row">
+        <span class="pass-lbl">Plain MinIO</span>
+        <div class="pass-bar-wrap"><div class="pass-bar cold" id="bar-minio" style="width:100%"></div></div>
+        <span class="pass-val" id="val-minio">—</span>
+      </div>
+      <div class="pass-row">
+        <span class="pass-lbl">FasterFS · P1</span>
+        <div class="pass-bar-wrap"><div class="pass-bar cold" id="bar-p1" style="width:100%"></div></div>
+        <span class="pass-val" id="val-p1">—</span>
+      </div>
+      <div class="pass-row">
+        <span class="pass-lbl">FasterFS · P2</span>
+        <div class="pass-bar-wrap"><div class="pass-bar warm" id="bar-p2" style="width:65%"></div></div>
+        <span class="pass-val" id="val-p2">—</span>
+      </div>
+      <div class="pass-row">
+        <span class="pass-lbl">FasterFS · P3</span>
+        <div class="pass-bar-wrap"><div class="pass-bar hot"  id="bar-p3" style="width:12%"></div></div>
+        <span class="pass-val" id="val-p3">—</span>
+      </div>
+    </div>
+
+    <div class="cwrap" style="height:110px;margin-top:.6rem"><canvas id="chart-bench"></canvas></div>
+  </div>
+
+  <!-- eBPF Metrics strip — hidden until running as root with live eBPF
+  <div class="metrics-strip">
+    <div class="card"><div class="ctitle">Chunk Reads (kernel)</div><div class="big-num" id="m-reads">0</div><div class="metric-lbl">reads observed by TC hook</div><div class="metric-sub" id="m-bytes">— bytes</div></div>
+    <div class="card"><div class="ctitle">Hot Chunks Cached</div><div class="big-num" id="m-hot">0</div><div class="metric-lbl">chunks promoted to local cache</div><div class="pbar-wrap"><div class="pbar" id="pbar-hot" style="width:0%"></div></div><div class="metric-sub" id="m-hitpct">—% cache hit rate</div></div>
+    <div class="card"><div class="ctitle">MinIO Latency (kernel)</div><div class="big-num" id="m-lat">—</div><div class="metric-lbl">avg μs · measured by BPF hook</div><div class="metric-sub">not time.time() — actual kernel ns</div></div>
+    <div class="card"><div class="ctitle">TCP Connections Tuned</div><div class="big-num" id="m-tcp">0</div><div class="metric-lbl">TCP_NODELAY + QUICKACK set</div><div class="metric-sub">via SOCK_OPS cgroup hook</div></div>
+  </div>
+  -->
+
+  <!-- ── 5. Bottom row ─────────────────────────────────────────────────── -->
+  <div class="bottom">
+
+    <!-- MinIO Latency histogram -->
+    <div class="card">
+      <div class="ctitle">MinIO Latency Distribution <span class="badge" id="hist-badge">eBPF</span></div>
+      <div class="cwrap" style="height:175px"><canvas id="chart-hist"></canvas></div>
+    </div>
+
+    <!-- TCP optimization -->
+    <div class="card">
+      <div class="ctitle">TCP Optimization (SOCK_OPS)</div>
+      <div class="cwrap" style="height:110px"><canvas id="chart-tcp"></canvas></div>
+      <div style="margin-top:.55rem;font-size:.7rem;color:var(--muted);line-height:1.7">
+        <div>▸ <b style="color:var(--amber)">TCP_NODELAY</b> — disables Nagle's 40ms batching</div>
+        <div>▸ <b style="color:var(--amber)">TCP_QUICKACK</b> — no delayed ACKs</div>
+        <div id="tcp-pct" style="margin-top:.25rem;color:var(--amber)">Reduction: —%</div>
+      </div>
+    </div>
+
+
+  </div>
+
+</div><!-- /grid -->
+
+<script>
+"use strict";
+
+// ── Chart.js defaults ────────────────────────────────────────────────────────
+Chart.defaults.color = '#6B7280';
+Chart.defaults.borderColor = '#E5E7EB';
+Chart.defaults.font.family = "'Inter',system-ui,sans-serif";
+Chart.defaults.font.size = 11;
+
+const C = {
+  amber:  '#111111',
+  gold:   '#D4232A',
+  red:    '#D4232A',
+  green:  '#16A34A',
+  border: '#E5E7EB',
+  bg:     '#F3F4F6',
+};
+
+// ── Price chart ──────────────────────────────────────────────────────────────
+let priceChart, priceLabels = [], priceData = [];
+const MAX_PTS = 80;
+
+function initPriceChart() {
+  priceChart = new Chart(document.getElementById('chart-price'), {
+    type: 'line',
+    data: {
+      labels: priceLabels,
+      datasets: [{
+        data: priceData,
+        borderColor: C.amber,
+        backgroundColor: 'rgba(122,79,8,.07)',
+        borderWidth: 1.5,
+        pointRadius: 0,
+        fill: true,
+        tension: .3,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      animation: { duration: 0 },
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { maxTicksLimit: 5, color: '#6B7280' }, grid: { color: '#F3F4F6' } },
+        y: { ticks: { callback: v => '$'+v.toFixed(2), color: '#6B7280' },
+             grid: { color: '#F3F4F6' } }
+      }
+    }
+  });
+}
+
+function pushPrice(label, val) {
+  priceLabels.push(label);
+  priceData.push(val);
+  if (priceLabels.length > MAX_PTS) { priceLabels.shift(); priceData.shift(); }
+  if (priceChart) priceChart.update('none');
+}
+
+async function loadPriceHistory() {
+  try {
+    const d = await fetch('/api/midprice').then(r=>r.json());
+    if (d.labels) {
+      const n = Math.min(50, d.labels.length);
+      for (let i = 0; i < n; i++) { priceLabels.push(d.labels[i]); priceData.push(d.values[i]); }
+      if (priceChart) priceChart.update();
+    }
+  } catch(e) {}
+}
+
+// ── Bench chart ──────────────────────────────────────────────────────────────
+let benchChart;
+const benchLabels = ['MinIO plain','FasterFS P1','FasterFS P2','FasterFS P3'];
+const benchColors = [
+  'rgba(176,48,32,.65)',
+  'rgba(122,79,8,.85)', 'rgba(200,146,42,.75)', 'rgba(42,96,24,.55)',
+];
+
+function initBenchChart() {
+  benchChart = new Chart(document.getElementById('chart-bench'), {
+    type: 'bar',
+    data: {
+      labels: benchLabels,
+      datasets: [{
+        data: [3.8, 3.8, 0.55, 0.15],
+        backgroundColor: benchColors,
+        borderColor: [C.red,C.amber,C.gold,C.green],
+        borderWidth: 1.5, borderRadius: 3,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      indexAxis: 'y',
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { callback: v => v+'ms', color:'#5C3A05' }, grid:{color:'rgba(204,186,128,.2)'} },
+        y: { ticks: { color:'#5C3A05' }, grid:{display:false} }
+      }
+    }
+  });
+}
+
+function updateBenchChart(minio, p1, p2, p3) {
+  if (!benchChart) return;
+  benchChart.data.datasets[0].data = [minio, p1, p2, p3];
+  benchChart.update();
+}
+
+// ── Histogram ────────────────────────────────────────────────────────────────
+let histChart;
+function initHistChart(labels, counts) {
+  histChart = new Chart(document.getElementById('chart-hist'), {
+    type:'bar',
+    data:{ labels, datasets:[{data:counts,backgroundColor:'rgba(17,17,17,.15)',
+      borderColor:C.amber,borderWidth:1,borderRadius:2}] },
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false}},
+      scales:{
+        x:{ticks:{color:'#5C3A05',maxRotation:35,font:{size:10}},grid:{display:false}},
+        y:{ticks:{color:'#5C3A05'},grid:{color:'rgba(204,186,128,.2)'}}
+      }
+    }
+  });
+}
+function updateHistChart(labels, counts) {
+  if (!histChart) { initHistChart(labels, counts); return; }
+  histChart.data.labels = labels;
+  histChart.data.datasets[0].data = counts;
+  histChart.update('none');
+}
+
+// ── TCP chart ────────────────────────────────────────────────────────────────
+let tcpChart;
+function initTcpChart() {
+  tcpChart = new Chart(document.getElementById('chart-tcp'), {
+    type:'bar',
+    data:{
+      labels:['Without SOCK_OPS','With SOCK_OPS'],
+      datasets:[{data:[3.8,2.1],
+        backgroundColor:['rgba(176,48,32,.6)','rgba(42,96,24,.6)'],
+        borderColor:[C.red,C.green],borderWidth:1.5,borderRadius:3}]
+    },
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false}},
+      scales:{
+        x:{ticks:{color:'#5C3A05'},grid:{display:false}},
+        y:{ticks:{callback:v=>v+'ms',color:'#5C3A05'},grid:{color:'rgba(204,186,128,.2)'}}
+      }
+    }
+  });
+}
+function updateTcpChart(wo, wi) {
+  if (!tcpChart) return;
+  tcpChart.data.datasets[0].data = [wo, wi];
+  tcpChart.update();
+  const pct = ((wo - wi) / wo * 100).toFixed(1);
+  document.getElementById('tcp-pct').textContent = `Reduction: ${pct}% less latency per request`;
+}
+
+// ── Order Book ───────────────────────────────────────────────────────────────
+function renderOB(ob) {
+  document.getElementById('ob-mid').textContent = '$' + ob.mid.toFixed(2);
+  document.getElementById('ob-spread').textContent = 'spread $' + ob.spread.toFixed(4);
+  document.getElementById('ob-time').textContent = fmtTime(ob.time);
+
+  // asks sorted descending (highest first), bids sorted descending (highest = closest to mid first)
+  const asks = [...ob.asks].sort((a,b) => b.price - a.price);
+  const bids = [...ob.bids].sort((a,b) => b.price - a.price);
+
+  let html = '';
+  for (let i = 0; i < 5; i++) {
+    const a = asks[i] || {price:0, size:0};
+    const b = bids[i] || {price:0, size:0};
+    html += `<tr>
+      <td class="ask-price">${a.price.toFixed(2)}</td>
+      <td class="sz">${a.size}</td>
+      <td style="width:8px"></td>
+      <td class="sz">${b.size}</td>
+      <td class="bid-price">${b.price.toFixed(2)}</td>
+    </tr>`;
+  }
+  document.getElementById('ob-body').innerHTML = html;
+}
+
+// ── eBPF metrics ─────────────────────────────────────────────────────────────
+function updateMetrics(e) {
+  document.getElementById('m-reads').textContent  = fmt(e.reads);
+  document.getElementById('m-hot').textContent    = fmt(e.hot);
+  document.getElementById('m-lat').textContent    = e.lat_us > 0 ? e.lat_us.toFixed(0)+'μs' : '—';
+  document.getElementById('m-tcp').textContent    = fmt(e.tcp);
+  const hp = e.reads > 0 ? Math.min(100, e.hot / e.reads * 100) : 0;
+  document.getElementById('pbar-hot').style.width = hp + '%';
+  document.getElementById('m-hitpct').textContent = hp.toFixed(1) + '% cache hit rate';
+  document.getElementById('m-bytes').textContent  = fmtBytes(e.reads * 4096);
+  // status dots
+  const sim = e.sim;
+  setDot('ebpf-dot', sim ? 'amber' : 'green');
+  document.getElementById('ebpf-lbl').textContent = sim ? 'eBPF: SIM' : 'eBPF: LIVE';
+  document.getElementById('hist-badge').textContent = sim ? 'SIM' : 'LIVE';
+}
+
+// ── WebSocket ────────────────────────────────────────────────────────────────
+let ws, wsRetry = 0;
+function connectWS() {
+  ws = new WebSocket(`ws://${location.host}/ws`);
+  ws.onopen  = () => { wsRetry=0; setDot('ws-dot','green'); document.getElementById('ws-lbl').textContent='LIVE'; };
+  ws.onclose = () => { setDot('ws-dot','red'); document.getElementById('ws-lbl').textContent='RECONNECTING';
+    wsRetry++; setTimeout(connectWS, Math.min(800*wsRetry,5000)); };
+  ws.onerror = () => ws.close();
+  ws.onmessage = e => {
+    const m = JSON.parse(e.data);
+    if (m.type === 'tick') {
+      renderOB(m.ob);
+      pushPrice(fmtTime(m.ob.time), m.ob.mid);
+      // updateMetrics(m.ebpf);  // hidden until live eBPF (sudo python3 main.py)
+    }
+  };
+}
+
+// ── Status polling ────────────────────────────────────────────────────────────
+async function pollStatus() {
+  try {
+    const d = await fetch('/api/status').then(r=>r.json());
+    document.getElementById('hdr-rows').textContent = (d.data_rows||0).toLocaleString();
+    setDot('minio-dot', d.minio ? 'green' : 'red');
+    document.getElementById('minio-lbl').textContent = d.minio ? 'MinIO: UP' : 'MinIO: DOWN';
+  } catch(e) {}
+}
+
+// ── Histogram polling ─────────────────────────────────────────────────────────
+async function pollHist() {
+  try {
+    const d = await fetch('/api/ebpf/histogram').then(r=>r.json());
+    updateHistChart(d.labels, d.counts);
+  } catch(e) {}
+}
+
+// ── TCP polling ───────────────────────────────────────────────────────────────
+async function pollTCP() {
+  try {
+    const d = await fetch('/api/ebpf/tcp').then(r=>r.json());
+    updateTcpChart(d.without_ms, d.with_ms);
+  } catch(e) {}
+}
+
+
+// ── Benchmark ─────────────────────────────────────────────────────────────────
+let benchPoll;
+async function runBench() {
+  const btn = document.getElementById('btn-bench');
+  btn.disabled = true; btn.textContent = '⏳ RUNNING…';
+  await fetch('/api/benchmark/run', {method:'POST'});
+  if (benchPoll) clearInterval(benchPoll);
+  benchPoll = setInterval(async () => {
+    const d = await fetch('/api/benchmark/result').then(r=>r.json());
+    if (d.status === 'complete') {
+      clearInterval(benchPoll);
+      btn.disabled=false; btn.textContent='▶ BENCHMARK STORAGE';
+      applyBenchResult(d.result);
+    } else if (d.status === 'not_started') {
+      clearInterval(benchPoll); btn.disabled=false; btn.textContent='▶ BENCHMARK STORAGE';
+    }
+  }, 1500);
+}
+
+function applyBenchResult(r) {
+  const minio = r.minio?.avg_ms   || 3.8;
+  const p1    = r.pass1?.avg_ms   || minio;
+  const p2    = r.pass2?.avg_ms   || p1;
+  const p3    = r.pass3?.avg_ms   || p2;
+  const maxMs = Math.max(minio, p1, p2, p3) || 1;
+
+  const setBar = (id, val, max) =>
+    document.getElementById(id).style.width = Math.max(2, val/max*100).toFixed(1)+'%';
+  const setVal = (id, val) =>
+    document.getElementById(id).textContent = val.toFixed(2)+'ms';
+
+  setBar('bar-minio', minio, maxMs); setVal('val-minio', minio);
+  setBar('bar-p1',    p1,    maxMs); setVal('val-p1',    p1);
+  setBar('bar-p2',    p2,    maxMs); setVal('val-p2',    p2);
+  setBar('bar-p3',    p3,    maxMs); setVal('val-p3',    p3);
+
+  const sp = r.speedup?.pass1_vs_pass3 || r.speedup?.minio_vs_pass3 || '—';
+  document.getElementById('speedup-num').textContent = sp + 'x';
+  document.getElementById('speedup-lbl').textContent =
+    `FASTER: FasterFS P3 vs plain MinIO`;
+
+  updateBenchChart(minio, p1, p2, p3);
+}
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+function fmt(n) { return (n||0).toLocaleString(); }
+function fmtBytes(b) {
+  if (b > 1e9) return (b/1e9).toFixed(1)+'GB observed';
+  if (b > 1e6) return (b/1e6).toFixed(1)+'MB observed';
+  return (b/1e3).toFixed(0)+'KB observed';
+}
+function fmtTime(t) {
+  const h=Math.floor(t/3600), m=Math.floor((t%3600)/60), s=Math.floor(t%60);
+  return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+}
+function setDot(id, cls) {
+  const el = document.getElementById(id);
+  el.className = 'dot dot-'+cls;
+}
+
+// ── Init ─────────────────────────────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', async () => {
+  initPriceChart();
+  initBenchChart();
+  initTcpChart();
+
+  connectWS();
+  loadPriceHistory();
+  pollStatus();
+  pollHist();
+  pollTCP();
+
+  setInterval(pollStatus, 10000);
+  setInterval(pollHist,    3500);
+  setInterval(pollTCP,     5000);
+});
+</script>
+</body>
+</html>
