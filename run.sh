@@ -69,8 +69,8 @@ echo ""
 
 # Run with sudo if eBPF loading is desired; else as current user
 if [ "$(id -u)" = "0" ]; then
-  python3 "$SCRIPT_DIR/main.py"
+  "$SCRIPT_DIR/venv/bin/python" "$SCRIPT_DIR/main.py"
 else
   log "Not root — eBPF will use simulation mode. Use 'sudo ./run.sh' for real eBPF."
-  python3 "$SCRIPT_DIR/main.py"
+  "$SCRIPT_DIR/venv/bin/python" "$SCRIPT_DIR/main.py"
 fi

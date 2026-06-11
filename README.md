@@ -255,20 +255,19 @@ POST /api/node/sync_chunks      Sync chunk range from another MinIO
 
 ```
 FasterFS/
-├── final_implementation/
-│   ├── ebpf/
-│   │   ├── fasterfs_monitor.bpf.c   # TC hook: latency + hotness tracking
-│   │   ├── fasterfs_sockopts.bpf.c  # SOCK_OPS: TCP_NODELAY + TCP_QUICKACK
-│   │   └── loader.py                # Compile, attach, read BPF maps
-│   ├── static/
-│   │   ├── index.html               # Main dashboard
-│   │   ├── kernel.html              # Live eBPF chunk heatmap
-│   │   ├── demos.html               # Demo A / B / C
-│   │   └── fs.html                  # Filesystem explorer
-│   ├── storage_backends.py          # LocalCSV / MinIO / FasterFS backends
-│   ├── benchmark.py                 # Demo A + Demo B benchmark logic
-│   ├── ebpf_cache.py                # eBPF stats reader
-│   └── main.py                      # FastAPI server
+├── ebpf/
+│   ├── fasterfs_monitor.bpf.c   # TC hook: latency + hotness tracking
+│   ├── fasterfs_sockopts.bpf.c  # SOCK_OPS: TCP_NODELAY + TCP_QUICKACK
+│   └── loader.py                # Compile, attach, read BPF maps
+├── static/
+│   ├── index.html               # Main dashboard
+│   ├── kernel.html              # Live eBPF chunk heatmap
+│   ├── demos.html               # Demo A / B / C
+│   └── fs.html                  # Filesystem explorer
+├── storage_backends.py          # LocalCSV / MinIO / FasterFS backends
+├── benchmark.py                 # Demo A + Demo B benchmark logic
+├── ebpf_cache.py                # eBPF stats reader
+└── main.py                      # FastAPI server
 └── LOBSTER_SampleFile_AAPL_.../     # Market data (not in repo)
 ```
 
